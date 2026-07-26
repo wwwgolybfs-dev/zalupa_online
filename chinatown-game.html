@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<script>
+  // Apply saved theme before paint (avoids flash)
+  (function () { 
+    var t = localStorage.getItem('petzker_theme') || 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  })();
+</script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Petzker Cookware — Team App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Caveat:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --blue: #2E7BEE;
+      --blue-light: #EBF3FD;
+      --orange: #F0921A;
+      --orange-light: #FEF3E2;
+      --bg: #F6F8FA;
+      --surface: #FFFFFF;
+      --border: #E8ECF0;
+      --text: #1A1D23;
+      --text-muted: #8A94A0;
+      --green: #22C55E;
+      --green-light: #F0FDF4;
+      --red: #EF4444;
+      --red-light: #FEF2F2;
+      --radius: 16px;
+      --radius-sm: 10px;
+      --shadow: 0 2px 12px rgba(0,0,0,0.06);
+
+      --diary-bg: #FDF8F0;
+      --diary-header-bg: #FDF8F0;
+      --diary-line: #E8D8C4;
+      --diary-margin: #F0C4C0;
+      --diary-text: #3D2B1A;
+      --diary-muted: #B89A7A;
+      --diary-placeholder: #C4A882;
+      --diary-accent: #7C5C3A;
+      --diary-entry-border: #DDD0C0;
+      --diary-empty: #C4A882;
+    }
+
+    [data-theme="dark"] {
+      --blue: #5B9EF5;
+      --blue-light: #1B3A5C;
+      --orange: #F5A542;
+      --orange-light: #3D2E14;
+      --bg: #14171C;
+      --surface: #1C2028;
+      --border: #2A2F38;
+      --text: #ECEEF1;
+      --text-muted: #8B94A0;
+      --green: #34D399;
+      --green-light: #113D2C;
+      --red: #F87171;
+      --red-light: #3D1B1B;
+      --shadow: 0 2px 12px rgba(0,0,0,0.35);
+
+      --diary-bg: #211D18;
+      --diary-header-bg: #211D18;
+      --diary-line: #3A3128;
+      --diary-margin: #5C3A38;
+      --diary-text: #E8DAC4;
+      --diary-muted: #A08A68;
+      --diary-placeholder: #6B5C46;
+      --diary-accent: #D4B483;
+      --diary-entry-border: #3A3128;
+      --diary-empty: #6B5C46;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      transition: background-color .2s, color .2s;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      transition: background-color .2s, border-color .2s;
+    }
+    .header-logo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .header-logo-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: var(--blue);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .logo-icon svg { width: 20px; height: 20px; }
+    .logo-text { font-size: 15px; font-weight: 700; color: var(--text); }
+    .logo-text span { color: var(--orange); }
+
+    .theme-toggle {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all .15s;
+      flex-shrink: 0;
+    }
+    .theme-toggle:hover { border-color: var(--blue); color: var(--blue); }
+    .theme-toggle:active { transform: scale(.92) rotate(-8deg); }
+    .theme-toggle svg { width: 18px; height: 18px; }
+
+    /* ── TABS ── */
+    .tabs { display: flex; gap: 4px; }
+    .tab {
+      flex: 1;
+      padding: 10px 0;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+    .tab:active { transform: scale(.97); }
+
+    /* ── VIEWS ── */
+    .view { display: none; padding: 20px; }
+    .view.active { display: block; animation: viewFade .28s ease; }
+    @keyframes viewFade {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── CONFIG BANNER ── */
+    .config-banner {
+      background: var(--orange-light);
+      color: var(--orange);
+      border: 1px solid var(--orange);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── CALENDAR ── */
+    .calendar-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .month-label { font-size: 17px; font-weight: 700; text-transform: capitalize; transition: opacity .15s; }
+    .nav-btn {
+      width: 36px;
+      height: 36px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: all 0.15s;
+      font-size: 16px;
+    }
+    .nav-btn:hover { border-color: var(--blue); color: var(--blue); }
+    .nav-btn:active { transform: scale(.9); }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .weekday {
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding: 6px 0;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+    .day-cell {
+      aspect-ratio: 1;
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      background: var(--surface);
+      border: 1.5px solid transparent;
+      transition: border-color .15s, background-color .15s, transform .15s;
+      position: relative;
+      padding: 4px 2px;
+      animation: cellIn .3s ease both;
+    }
+    @keyframes cellIn {
+      from { opacity: 0; transform: translateY(5px) scale(.94); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes cellPulse {
+      0% { transform: scale(1); }
+      35% { transform: scale(1.14); }
+      100% { transform: scale(1); }
+    }
+    .day-cell.cell-pulse { animation: cellPulse .45s ease; }
+    .day-cell.empty { background: transparent; cursor: default; animation: none; }
+    .day-cell:hover:not(.empty):not(.past) { border-color: var(--blue); }
+    .day-cell:active:not(.empty):not(.past) { transform: scale(.93); }
+    .day-cell.past { opacity: 0.35; cursor: default; }
+    .day-cell.today { border-color: var(--blue); color: var(--blue); font-weight: 700; }
+    .day-cell.weekend-day { color: var(--red); }
+    .day-cell.has-one { border-color: var(--green); }
+    .day-cell.has-two { border-color: var(--orange); background: var(--orange-light); }
+    .day-cell.full { border-color: var(--red); background: var(--red-light); opacity: 0.65; }
+
+    .day-num { font-size: 13px; line-height: 1; }
+    .day-dots { display: flex; gap: 2px; margin-top: 3px; }
+    .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--blue); }
+    .dot.orange { background: var(--orange); }
+
+    /* ── LEGEND ── */
+    .legend {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+      padding: 14px;
+      background: var(--surface);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+
+    /* ── UPCOMING ── */
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin: 20px 0 10px;
+    }
+    .upcoming-list { display: flex; flex-direction: column; gap: 8px; }
+    .upcoming-item {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--border);
+      animation: entryIn .3s ease both;
+    }
+    .upcoming-date {
+      min-width: 42px;
+      text-align: center;
+      background: var(--blue-light);
+      border-radius: 8px;
+      padding: 6px 4px;
+    }
+    .upcoming-date .ud-day { font-size: 18px; font-weight: 700; color: var(--blue); line-height: 1; }
+    .upcoming-date .ud-mon { font-size: 10px; color: var(--blue); font-weight: 600; text-transform: uppercase; }
+    .upcoming-names { flex: 1; }
+    .name-chip {
+      display: inline-block;
+      background: var(--blue-light);
+      color: var(--blue);
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      margin: 2px 3px 2px 0;
+    }
+    .empty-state { text-align: center; padding: 32px 20px; color: var(--text-muted); font-size: 14px; }
+
+    /* ── MODAL ── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 200; display: none; align-items: flex-end; justify-content: center;
+      opacity: 0; transition: opacity .2s;
+    }
+    .overlay.open { display: flex; opacity: 1; }
+    .modal {
+      background: var(--surface);
+      border-radius: 24px 24px 0 0;
+      padding: 24px 24px 36px;
+      width: 100%;
+      max-width: 480px;
+      animation: slideUp 0.28s cubic-bezier(.2,.9,.3,1.2);
+    }
+    @keyframes slideUp { from { transform: translateY(60px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .modal-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; transition: color .15s; }
+    .modal-who { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+    .who-chip {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--blue-light); color: var(--blue); border-radius: 20px;
+      padding: 5px 6px 5px 12px; font-size: 13px; font-weight: 500;
+      animation: chipIn .25s ease both;
+      transition: opacity .2s, transform .2s;
+    }
+    @keyframes chipIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: scale(1); } }
+    .who-chip.removing { animation: chipOut .22s ease forwards; }
+    @keyframes chipOut { to { opacity: 0; transform: scale(.75); } }
+    .chip-remove {
+      width: 18px; height: 18px; border-radius: 50%; border: none;
+      background: rgba(46,123,238,0.15); color: var(--blue);
+      font-size: 13px; line-height: 1; cursor: pointer; display: flex;
+      align-items: center; justify-content: center; padding: 0;
+      transition: all .15s; font-family: inherit;
+    }
+    .chip-remove:hover { background: var(--red-light); color: var(--red); }
+    .chip-remove:active { transform: scale(.85); }
+    .modal-input {
+      width: 100%;
+      padding: 13px 16px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--bg);
+      color: var(--text);
+    }
+    .modal-input:focus { border-color: var(--blue); }
+    .modal-input.error { border-color: var(--red); animation: shake .3s; }
+    @keyframes shake {
+      25% { transform: translateX(-4px); }
+      75% { transform: translateX(4px); }
+    }
+    .modal-error { color: var(--red); font-size: 12px; margin-top: 6px; display: none; }
+    .modal-error.show { display: block; animation: entryIn .2s ease; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .btn-primary {
+      flex: 1; padding: 14px; background: var(--blue); color: white; border: none;
+      border-radius: var(--radius-sm); font-size: 15px; font-weight: 600; cursor: pointer;
+      font-family: inherit; transition: opacity 0.15s, transform .15s;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:active { transform: scale(.97); }
+    .btn-primary:disabled { opacity: .6; cursor: default; }
+    .btn-secondary {
+      padding: 14px 20px; background: var(--bg); color: var(--text-muted);
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 15px; font-weight: 500; cursor: pointer; font-family: inherit;
+      transition: transform .15s;
+    }
+    .btn-secondary:active { transform: scale(.97); }
+    .modal-full-note {
+      font-size: 12.5px; color: var(--text-muted); background: var(--bg);
+      border: 1px dashed var(--border); border-radius: var(--radius-sm);
+      padding: 10px 12px; margin-bottom: 4px;
+    }
+    .modal-auth-note {
+      font-size: 12px; color: var(--blue); background: var(--blue-light);
+      border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .modal-input[readonly] { opacity: .75; cursor: default; }
+
+    /* ── DIARY ── */
+    #view-diary { padding: 0; }
+
+    /* ── GAME TAB ── */
+    #view-game { padding: 20px; }
+    #game-frame-wrap { width: 100%; }
+    #game-frame-wrap iframe {
+      width: 100%;
+      height: 640px;
+      border: none;
+      border-radius: var(--radius);
+      display: block;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+    .diary-bg {
+      min-height: calc(100vh - 120px);
+      background:
+        linear-gradient(to bottom, transparent 39px, var(--diary-line) 39px);
+      background-size: 100% 40px;
+      background-color: var(--diary-bg);
+      padding: 20px 20px 20px 60px;
+      position: relative;
+      transition: background-color .2s;
+    }
+    .diary-margin-line {
+      position: absolute; left: 52px; top: 0; bottom: 0; width: 1.5px;
+      background: var(--diary-margin); pointer-events: none;
+    }
+    .diary-header-strip {
+      background: var(--diary-header-bg);
+      padding: 20px 20px 14px;
+      border-bottom: 2px solid var(--diary-line);
+      position: sticky; top: 0; z-index: 10;
+      transition: background-color .2s, border-color .2s;
+    }
+    .diary-title { font-family: 'Caveat', cursive; font-size: 26px; font-weight: 600; color: var(--diary-accent); margin-bottom: 2px; }
+    .diary-subtitle { font-size: 12px; color: var(--diary-muted); font-style: italic; }
+    .diary-new-entry { margin-bottom: 24px; }
+    .diary-date-label { font-family: 'Caveat', cursive; font-size: 15px; color: var(--diary-muted); margin-bottom: 8px; }
+    .diary-textarea {
+      width: 100%; min-height: 100px; background: transparent; border: none; outline: none;
+      font-family: 'Caveat', cursive; font-size: 18px; color: var(--diary-text);
+      resize: none; line-height: 40px; padding: 2px 0;
+    }
+    .diary-textarea::placeholder { color: var(--diary-placeholder); }
+    .diary-add-btn {
+      margin-top: 6px; padding: 10px 22px; background: var(--diary-accent); color: var(--diary-bg);
+      border: none; border-radius: 20px; font-family: 'Caveat', cursive; font-size: 16px;
+      cursor: pointer; transition: opacity 0.2s, transform .15s; font-weight: 600;
+    }
+    .diary-add-btn:hover { opacity: 0.85; }
+    .diary-add-btn:active { transform: scale(.95); }
+    .diary-add-btn:disabled { opacity: .5; cursor: default; }
+    .diary-divider { height: 1px; background: var(--diary-line); margin: 20px 0; }
+    .diary-entries { display: flex; flex-direction: column; gap: 0; min-height: 60px; }
+    .diary-entry { padding: 12px 0; border-bottom: 1px dashed var(--diary-entry-border); animation: entryIn .3s ease both; }
+    @keyframes entryIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .diary-entry-date { font-family: 'Caveat', cursive; font-size: 13px; color: var(--diary-muted); margin-bottom: 4px; }
+    .diary-entry-text { font-family: 'Caveat', cursive; font-size: 18px; color: var(--diary-text); line-height: 1.6; white-space: pre-wrap; }
+    .diary-empty { font-family: 'Caveat', cursive; font-size: 17px; color: var(--diary-empty); text-align: center; padding: 32px 0; font-style: italic; }
+
+    /* ── PAGINATION ── */
+    .diary-pagination { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 22px 0 8px; flex-wrap: wrap; }
+    .page-btn {
+      min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px;
+      border: 1px solid var(--diary-entry-border); background: var(--diary-bg); color: var(--diary-muted);
+      font-size: 13px; font-weight: 600; cursor: pointer; display: flex; align-items: center;
+      justify-content: center; font-family: 'Inter', sans-serif; transition: all .15s;
+    }
+    .page-btn:hover:not(:disabled) { border-color: var(--diary-accent); color: var(--diary-accent); }
+    .page-btn:active:not(:disabled) { transform: scale(.9); }
+    .page-btn.active { background: var(--diary-accent); border-color: var(--diary-accent); color: var(--diary-bg); }
+    .page-btn:disabled { opacity: .3; cursor: not-allowed; }
+    .page-ellipsis { color: var(--diary-muted); font-size: 13px; padding: 0 2px; }
+
+    /* ── TOAST ── */
+    .toast {
+      position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(16px) scale(.9);
+      background: #1A1D23; color: white; padding: 10px 20px; border-radius: 30px;
+      font-size: 13px; font-weight: 500; opacity: 0;
+      transition: opacity .25s, transform .3s cubic-bezier(.34,1.56,.64,1);
+      z-index: 300; pointer-events: none; white-space: nowrap; max-width: 90vw; text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">
+    <div class="header-logo-left">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="16.5" y1="5" x2="19" y2="2"/>
+          <line x1="2" y1="18" x2="5" y2="21" stroke-width="3"/>
+        </svg>
+      </div>
+      <div class="logo-text">Petzker <span>Cookware</span></div>
+    </div>
+    <button class="theme-toggle" onclick="toggleTheme()" id="theme-toggle-btn" aria-label="Переключить тему"></button>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-tab="calendar" onclick="switchTab('calendar')">📅 Выходные</button>
+    <button class="tab" data-tab="diary" onclick="switchTab('diary')">📓 Дневник</button>
+    <button class="tab" data-tab="game" onclick="switchTab('game')">🏮 Чайна Таун</button>
+  </div>
+</div>
+
+<!-- CALENDAR VIEW -->
+<div id="view-calendar" class="view active">
+  <div class="config-banner" id="config-banner">
+    ⚠️ Общая база данных не подключена — записи видны только на этом устройстве. Смотрите README.md, чтобы включить общий доступ для всей команды.
+  </div>
+
+  <div class="calendar-nav">
+    <button class="nav-btn" onclick="changeMonth(-1)" aria-label="Предыдущий месяц">‹</button>
+    <div class="month-label" id="month-label"></div>
+    <button class="nav-btn" onclick="changeMonth(1)" aria-label="Следующий месяц">›</button>
+  </div>
+
+  <div class="weekdays">
+    <div class="weekday">Пн</div><div class="weekday">Вт</div>
+    <div class="weekday">Ср</div><div class="weekday">Чт</div>
+    <div class="weekday">Пт</div>
+    <div class="weekday" style="color:var(--red)">Сб</div>
+    <div class="weekday" style="color:var(--red)">Вс</div>
+  </div>
+  <div class="calendar-grid" id="calendar-grid"></div>
+
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div> 1 человек</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div> 2 человека</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div> Мест нет</div>
+  </div>
+
+  <div class="section-title">Ближайшие выходные</div>
+  <div class="upcoming-list" id="upcoming-list"></div>
+</div>
+
+<!-- DIARY VIEW -->
+<div id="view-diary" class="view">
+  <div class="diary-header-strip">
+    <div class="diary-title">Дневник оптимиста ✨</div>
+    <div class="diary-subtitle">Пишите мысли — пусть хорошее останется</div>
+  </div>
+  <div class="diary-bg">
+    <div class="diary-margin-line"></div>
+    <div class="diary-new-entry">
+      <div class="diary-date-label" id="diary-today-label"></div>
+      <textarea class="diary-textarea" id="diary-input" placeholder="Что хорошего было сегодня или вчера?.."></textarea>
+      <button class="diary-add-btn" id="diary-add-btn" onclick="addDiaryEntry()">Записать ✦</button>
+    </div>
+    <div class="diary-divider"></div>
+    <div class="diary-entries" id="diary-entries"></div>
+    <div class="diary-pagination" id="diary-pagination"></div>
+  </div>
+</div>
+
+<!-- GAME VIEW -->
+<div id="view-game" class="view">
+  <div id="game-frame-wrap"></div>
+</div>
+
+<!-- MODAL -->
+<div class="overlay" id="modal-overlay" onclick="closeModalOutside(event)">
+  <div class="modal" id="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div class="modal-sub" id="modal-sub"></div>
+    <div class="modal-who" id="modal-who"></div>
+    <div id="modal-form">
+      <div id="add-form-fields">
+        <div class="modal-auth-note" id="auth-note" style="display:none"></div>
+        <input class="modal-input" id="name-input" type="text" placeholder="Ваше имя" maxlength="30"
+               onkeydown="if(event.key==='Enter') confirmDay()" />
+        <div class="modal-error" id="modal-error"></div>
+      </div>
+      <div id="full-note" class="modal-full-note" style="display:none">
+        Чтобы записать нового человека, сначала уберите кого-то — нажмите × рядом с именем выше.
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="closeModal()">Отмена</button>
+        <button class="btn-primary" id="confirm-btn" onclick="confirmDay()">Взять выходной</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// SUPABASE CONFIG — вставьте свои значения сюда
+// (инструкция в README.md)
+// ═══════════════════════════════════════════════
+// Пример: 'https://heubrattlnikielnfheg.supabase.co'
+const SUPABASE_URL = 'https://heubrattlnikielnfheg.supabase.co';
+// Пример: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhldWJyYXR0bG5pa2llbG5maGVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ5NzYyMjcsImV4cCI6MjEwMDU1MjIyN30._lRs77YnsILFN_Ru4uR2wDWQFtAlazZh8UaaKa7fsnM';
+
+const USE_SUPABASE = SUPABASE_URL.indexOf('http') === 0 && SUPABASE_ANON_KEY.length > 20;
+let supabaseClient = null;
+if (USE_SUPABASE) {
+  try {
+    supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('✓ Supabase connected:', SUPABASE_URL);
+  } catch (e) {
+    console.error('Supabase init error:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// LOCAL STORAGE FALLBACK (used when Supabase isn't configured)
+// ═══════════════════════════════════════════════
+const LS_VACATIONS = 'petzker_vacations_v3';
+const LS_DIARY = 'petzker_diary_v2';
+
+function loadVacationsLocal() {
+  try { return JSON.parse(localStorage.getItem(LS_VACATIONS)) || {}; }
+  catch { return {}; }
+}
+function saveVacationsLocal(data) { localStorage.setItem(LS_VACATIONS, JSON.stringify(data)); }
+
+function loadDiaryLocal() {
+  try { return JSON.parse(localStorage.getItem(LS_DIARY)) || []; }
+  catch { return []; }
+}
+function saveDiaryLocal(data) { localStorage.setItem(LS_DIARY, JSON.stringify(data)); }
+
+function uid() {
+  return (crypto.randomUUID) ? crypto.randomUUID() : 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+
+// ═══════════════════════════════════════════════
+// DATA LAYER (Supabase-aware, falls back to localStorage)
+// ═══════════════════════════════════════════════
+async function fetchVacations() {
+  if (!USE_SUPABASE) return loadVacationsLocal();
+  try {
+    const { data, error } = await supabaseClient
+      .from('vacations')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) { console.error('fetchVacations error:', error); return loadVacationsLocal(); }
+    const grouped = {};
+    (data || []).forEach(row => {
+      const dayStr = typeof row.day === 'string' ? row.day : row.day;
+      if (!grouped[dayStr]) grouped[dayStr] = [];
+      grouped[dayStr].push({ id: row.id, name: row.name, telegram_user_id: row.telegram_user_id ?? null });
+    });
+    return grouped;
+  } catch (e) { console.error('fetchVacations catch:', e); return loadVacationsLocal(); }
+}
+
+async function fetchDayEntries(day) {
+  if (!USE_SUPABASE) return loadVacationsLocal()[day] || [];
+  try {
+    const { data, error } = await supabaseClient
+      .from('vacations')
+      .select('*')
+      .eq('day', day)
+      .order('created_at', { ascending: true });
+    if (error) { console.error('fetchDayEntries error:', error); return vacations[day] || []; }
+    return (data || []).map(r => ({ id: r.id, name: r.name, telegram_user_id: r.telegram_user_id ?? null }));
+  } catch (e) { console.error('fetchDayEntries catch:', e); return vacations[day] || []; }
+}
+
+async function insertVacation(day, name, ownerId) {
+  if (USE_SUPABASE) {
+    const payload = { day, name };
+    if (ownerId != null) payload.telegram_user_id = ownerId;
+    try {
+      const { data, error } = await supabaseClient.from('vacations').insert([payload]).select().single();
+      if (error) throw error;
+      return { id: data.id, name, telegram_user_id: data.telegram_user_id ?? null };
+    } catch (e) {
+      // If the telegram_user_id column hasn't been added to Supabase yet, retry
+      // without it rather than breaking day-off booking entirely. See setup guide.
+      if (ownerId != null && /telegram_user_id/i.test(String(e && e.message || ''))) {
+        console.warn('vacations.telegram_user_id column missing — inserted without owner. Run the migration from the setup guide to enable "delete own entries only".');
+        try {
+          const { data, error: e2 } = await supabaseClient.from('vacations').insert([{ day, name }]).select().single();
+          if (e2) throw e2;
+          return { id: data.id, name, telegram_user_id: null };
+        } catch (e2) {
+          console.error('insertVacation fallback error:', e2);
+          throw e2;
+        }
+      }
+      console.error('insertVacation error:', e);
+      throw e;
+    }
+  }
+  const id = uid();
+  const all = loadVacationsLocal();
+  if (!all[day]) all[day] = [];
+  const entry = { id, name, telegram_user_id: ownerId != null ? ownerId : null };
+  all[day].push(entry);
+  saveVacationsLocal(all);
+  return entry;
+}
+
+async function deleteVacation(day, id) {
+  if (USE_SUPABASE) {
+    try {
+      const { error } = await supabaseClient
+        .from('vacations')
+        .delete()
+        .eq('id', id);
+      if (error) throw new Error(error.message);
+    } catch (e) {
+      console.error('deleteVacation error:', e);
+      throw e;
+    }
+    return;
+  }
+  const all = loadVacationsLocal();
+  if (all[day]) {
+    all[day] = all[day].filter(v => v.id !== id);
+    if (!all[day].length) delete all[day];
+    saveVacationsLocal(all);
+  }
+}
+
+async function fetchDiary() {
+  if (!USE_SUPABASE) return loadDiaryLocal();
+  try {
+    const { data, error } = await supabaseClient
+      .from('diary_entries')
+      .select('*')
+      .order('created_at', { ascending: true });
+    if (error) { console.error('fetchDiary error:', error); return loadDiaryLocal(); }
+    return (data || []).map(r => ({ id: r.id, text: r.text, created_at: r.created_at }));
+  } catch (e) { console.error('fetchDiary catch:', e); return loadDiaryLocal(); }
+}
+
+async function insertDiaryEntry(text) {
+  if (USE_SUPABASE) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('diary_entries')
+        .insert([{ text }])
+        .select()
+        .single();
+      if (error) throw new Error(error.message);
+      return { id: data.id, text, created_at: data.created_at };
+    } catch (e) {
+      console.error('insertDiaryEntry error:', e);
+      throw e;
+    }
+  }
+  const entry = { id: uid(), text, created_at: new Date().toISOString() };
+  const all = loadDiaryLocal();
+  all.push(entry);
+  saveDiaryLocal(all);
+  return entry;
+}
+
+// ═══════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════
+const today = new Date();
+let curYear = today.getFullYear();
+let curMonth = today.getMonth();
+let selectedKey = null;
+let vacations = {};
+let diaryEntries = [];
+let diaryPage = 1;
+let highlightKey = null; // day-cell to pulse on next calendar render
+const DIARY_PAGE_SIZE = 6;
+let currentUser = null; // { id, name } — resolved from Telegram, if opened inside Telegram
+
+// ═══════════════════════════════════════════════
+// GAME TAB (China Town) — hosted separately, embedded via iframe
+// ═══════════════════════════════════════════════
+// Вставьте сюда ссылку на chinatown-game.html после публикации на GitHub Pages,
+// например: 'https://your-username.github.io/petzker-game/chinatown-game.html'
+const GAME_URL = '';
+let gameFrameLoaded = false;
+
+// ═══════════════════════════════════════════════
+// TELEGRAM HELPERS (haptics + native confirm, with safe fallbacks)
+// ═══════════════════════════════════════════════
+function haptic(kind) {
+  try {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (!tg || !tg.HapticFeedback) return;
+    if (kind === 'success' || kind === 'error' || kind === 'warning') {
+      tg.HapticFeedback.notificationOccurred(kind);
+    } else {
+      tg.HapticFeedback.impactOccurred(kind || 'light');
+    }
+  } catch (e) { /* haptics are a nice-to-have, never block on failure */ }
+}
+
+function askConfirm(message) {
+  return new Promise((resolve) => {
+    try {
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg && typeof tg.showConfirm === 'function') {
+        tg.showConfirm(message, (ok) => resolve(!!ok));
+        return;
+      }
+    } catch (e) { /* fall through to browser confirm */ }
+    resolve(window.confirm(message));
+  });
+}
+
+// Resolves { id, name } from Telegram's launch data. Telegram provides this
+// automatically when the Mini App is opened inside the Telegram client — there
+// is no separate login step. Returns null when opened outside Telegram (e.g.
+// testing in a normal browser), in which case the app falls back to the old
+// free-text-name behaviour so nothing breaks.
+function getTelegramUser() {
+  try {
+    const tg = window.Telegram && window.Telegram.WebApp;
+    const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    if (u && u.id) {
+      const name = [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.username || ('User ' + u.id);
+      return { id: u.id, name };
+    }
+  } catch (e) { console.error('getTelegramUser error:', e); }
+  return null;
+}
+
+// ═══════════════════════════════════════════════
+// THEME
+// ═══════════════════════════════════════════════
+const SUN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="4"/><line x1="12" y1="20" x2="12" y2="22"/><line x1="4.2" y1="4.2" x2="5.6" y2="5.6"/><line x1="18.4" y1="18.4" x2="19.8" y2="19.8"/><line x1="2" y1="12" x2="4" y2="12"/><line x1="20" y1="12" x2="22" y2="12"/><line x1="4.2" y1="19.8" x2="5.6" y2="18.4"/><line x1="18.4" y1="5.6" x2="19.8" y2="4.2"/></svg>';
+const MOON_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+function applyThemeIcon() {
+  const theme = document.documentElement.getAttribute('data-theme') || 'light';
+  document.getElementById('theme-toggle-btn').innerHTML = theme === 'dark' ? SUN_ICON : MOON_ICON;
+}
+
+function toggleTheme() {
+  const html = document.documentElement;
+  const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', next);
+  localStorage.setItem('petzker_theme', next);
+  applyThemeIcon();
+  haptic('light');
+
+  const gameFrame = document.getElementById('game-frame');
+  if (gameFrame && gameFrame.contentWindow) {
+    try { gameFrame.contentWindow.postMessage({ type: 'petzker-theme', value: next }, '*'); }
+    catch (e) { console.error('theme postMessage error:', e); }
+  }
+}
+
+// ═══════════════════════════════════════════════
+// TABS
+// ═══════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t) => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.getElementById('view-calendar').classList.toggle('active', tab === 'calendar');
+  document.getElementById('view-diary').classList.toggle('active', tab === 'diary');
+  document.getElementById('view-game').classList.toggle('active', tab === 'game');
+  if (tab === 'diary') renderDiary();
+  if (tab === 'game') ensureGameFrameLoaded();
+  haptic('light');
+}
+
+// Loads the game iframe only the first time the tab is opened (saves resources).
+function ensureGameFrameLoaded() {
+  if (gameFrameLoaded) return;
+  gameFrameLoaded = true;
+  const wrap = document.getElementById('game-frame-wrap');
+
+  if (!GAME_URL) {
+    wrap.innerHTML = `<div class="config-banner" style="display:flex">
+      🏮 Игра ещё не подключена. Разместите chinatown-game.html на GitHub Pages
+      (или другом HTTPS-хостинге) и вставьте ссылку в переменную <b>GAME_URL</b> в коде этого файла.
+    </div>`;
+    return;
+  }
+
+  const params = new URLSearchParams();
+  if (currentUser) {
+    params.set('uid', String(currentUser.id));
+    params.set('name', currentUser.name);
+  }
+  params.set('theme', document.documentElement.getAttribute('data-theme') || 'light');
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'game-frame';
+  iframe.src = GAME_URL + (GAME_URL.includes('?') ? '&' : '?') + params.toString();
+  iframe.setAttribute('allow', 'autoplay');
+  wrap.innerHTML = '';
+  wrap.appendChild(iframe);
+}
+
+// ═══════════════════════════════════════════════
+// CALENDAR
+// ═══════════════════════════════════════════════
+const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+const MONTHS_RU_GEN = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const WEEKDAYS_RU = ['воскресенье','понедельник','вторник','среда','четверг','пятница','суббота'];
+
+function dayKey(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+
+function changeMonth(dir) {
+  curMonth += dir;
+  if (curMonth > 11) { curMonth = 0; curYear++; }
+  if (curMonth < 0) { curMonth = 11; curYear--; }
+  if (curYear < today.getFullYear() || (curYear === today.getFullYear() && curMonth < today.getMonth())) {
+    curMonth = today.getMonth(); curYear = today.getFullYear();
+  }
+  renderCalendar();
+  haptic('light');
+}
+
+function renderCalendar() {
+  document.getElementById('month-label').textContent = `${MONTHS_RU[curMonth]} ${curYear}`;
+
+  const grid = document.getElementById('calendar-grid');
+  grid.innerHTML = '';
+
+  const firstDay = new Date(curYear, curMonth, 1).getDay();
+  const shift = (firstDay === 0) ? 6 : firstDay - 1;
+  const daysInMonth = new Date(curYear, curMonth + 1, 0).getDate();
+
+  for (let i = 0; i < shift; i++) {
+    const el = document.createElement('div');
+    el.className = 'day-cell empty';
+    grid.appendChild(el);
+  }
+
+  let animIndex = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = dayKey(curYear, curMonth, d);
+    const date = new Date(curYear, curMonth, d);
+    const dow = date.getDay();
+    const isWeekend = (dow === 0 || dow === 6);
+    const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const names = vacations[key] || [];
+    const count = names.length;
+
+    const cell = document.createElement('div');
+    cell.className = 'day-cell';
+    if (isWeekend) cell.classList.add('weekend-day');
+    if (isPast) cell.classList.add('past');
+    if (date.toDateString() === today.toDateString()) cell.classList.add('today');
+    if (count === 1) cell.classList.add('has-one');
+    if (count === 2) cell.classList.add('has-two');
+    if (count >= 2) cell.classList.add('full');
+    if (key === highlightKey) {
+      cell.classList.add('cell-pulse');
+    } else {
+      cell.style.animationDelay = Math.min(animIndex * 10, 220) + 'ms';
+    }
+    animIndex++;
+
+    let dots = '';
+    if (count > 0) {
+      dots = '<div class="day-dots">' + names.slice(0,2).map(() => `<div class="dot ${count >= 2 ? 'orange' : ''}"></div>`).join('') + '</div>';
+    }
+
+    cell.innerHTML = `<div class="day-num">${d}</div>${dots}`;
+    if (!isPast) cell.addEventListener('click', () => openModal(key, d));
+    grid.appendChild(cell);
+  }
+
+  highlightKey = null;
+  renderUpcoming();
+}
+
+function renderUpcoming() {
+  const list = document.getElementById('upcoming-list');
+  list.innerHTML = '';
+
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const cutoff = new Date(todayMidnight);
+  cutoff.setDate(cutoff.getDate() + 60);
+
+  const relevant = Object.entries(vacations)
+    .filter(([k, v]) => { const d = new Date(k); return d >= todayMidnight && d <= cutoff && v.length > 0; })
+    .sort(([a],[b]) => a.localeCompare(b))
+    .slice(0, 10);
+
+  if (!relevant.length) {
+    list.innerHTML = '<div class="empty-state">Пока нет запланированных выходных</div>';
+    return;
+  }
+
+  relevant.forEach(([key, names], i) => {
+    const d = new Date(key + 'T00:00:00');
+    const item = document.createElement('div');
+    item.className = 'upcoming-item';
+    item.style.animationDelay = Math.min(i * 30, 200) + 'ms';
+    item.innerHTML = `
+      <div class="upcoming-date">
+        <div class="ud-day">${d.getDate()}</div>
+        <div class="ud-mon">${MONTHS_RU_GEN[d.getMonth()].slice(0,3)}</div>
+      </div>
+      <div class="upcoming-names">${names.map(n => `<span class="name-chip">${escHtml(n.name)}</span>`).join('')}</div>`;
+    list.appendChild(item);
+  });
+}
+
+// ═══════════════════════════════════════════════
+// MODAL
+// ═══════════════════════════════════════════════
+// A person may remove a vacation entry only if it's their own — i.e. its
+// telegram_user_id matches the currently authenticated Telegram user. When the
+// app is opened outside Telegram (no identity available), it falls back to the
+// original open behaviour, but only for legacy/local entries that have no
+// owner attached (entries someone else created with an identity stay protected).
+function canDeleteEntry(entry) {
+  if (currentUser) return entry.telegram_user_id != null && String(entry.telegram_user_id) === String(currentUser.id);
+  return entry.telegram_user_id == null;
+}
+
+function renderModalContent(day, names) {
+  const d = new Date(day + 'T00:00:00');
+  document.getElementById('modal-title').textContent = `${d.getDate()} ${MONTHS_RU_GEN[d.getMonth()]} ${d.getFullYear()}`;
+
+  const whoDiv = document.getElementById('modal-who');
+  if (names.length) {
+    whoDiv.innerHTML = names.map(n => `
+      <span class="who-chip" data-id="${n.id}" data-name="${escAttr(n.name)}">
+        <span>${escHtml(n.name)}</span>
+        ${canDeleteEntry(n) ? `<button type="button" class="chip-remove" aria-label="Убрать ${escHtml(n.name)}">×</button>` : ''}
+      </span>`).join('');
+    whoDiv.style.display = 'flex';
+  } else {
+    whoDiv.innerHTML = '';
+    whoDiv.style.display = 'none';
+  }
+
+  const full = names.length >= 2;
+  const addFields = document.getElementById('add-form-fields');
+  const confirmBtn = document.getElementById('confirm-btn');
+  const fullNote = document.getElementById('full-note');
+
+  if (full) {
+    document.getElementById('modal-sub').textContent = '😅 Уже 2 человека — мест нет.';
+    addFields.style.display = 'none';
+    confirmBtn.style.display = 'none';
+    fullNote.style.display = 'block';
+  } else {
+    document.getElementById('modal-sub').textContent = names.length ? 'Ещё одно место свободно!' : 'Запишите своё имя';
+    addFields.style.display = 'block';
+    confirmBtn.style.display = 'block';
+    fullNote.style.display = 'none';
+  }
+}
+
+// Pre-fills and locks the name field to the authenticated Telegram identity,
+// so the record's owner always matches who actually took the day off.
+// Falls back to a free-text field when opened outside Telegram.
+function applyAuthToForm() {
+  const nameEl = document.getElementById('name-input');
+  const noteEl = document.getElementById('auth-note');
+  if (currentUser) {
+    nameEl.value = currentUser.name;
+    nameEl.readOnly = true;
+    noteEl.textContent = `👤 Вы вошли как ${currentUser.name} (Telegram)`;
+    noteEl.style.display = 'flex';
+  } else {
+    nameEl.value = '';
+    nameEl.readOnly = false;
+    noteEl.style.display = 'none';
+  }
+}
+
+async function openModal(key, day) {
+  selectedKey = key;
+  document.getElementById('modal-overlay').classList.add('open');
+  applyAuthToForm();
+  document.getElementById('name-input').classList.remove('error');
+  document.getElementById('modal-error').classList.remove('show');
+
+  // Optimistic instant render from cache, then refresh from source of truth
+  renderModalContent(key, vacations[key] || []);
+  haptic('light');
+
+  const names = await fetchDayEntries(key);
+  // Guard against the user having already navigated away from this day
+  if (selectedKey !== key) return;
+  vacations[key] = names;
+  renderModalContent(key, names);
+
+  setTimeout(() => {
+    const input = document.getElementById('name-input');
+    if (input.offsetParent !== null) input.focus();
+  }, 200);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  selectedKey = null;
+}
+function closeModalOutside(e) { if (e.target === document.getElementById('modal-overlay')) closeModal(); }
+
+async function confirmDay() {
+  const nameEl = document.getElementById('name-input');
+  const errEl = document.getElementById('modal-error');
+  const name = currentUser ? currentUser.name : nameEl.value.trim();
+  const ownerId = currentUser ? currentUser.id : null;
+
+  errEl.classList.remove('show');
+  nameEl.classList.remove('error');
+
+  if (!name) {
+    nameEl.classList.add('error');
+    errEl.textContent = 'Пожалуйста, введите имя';
+    errEl.classList.add('show');
+    return;
+  }
+
+  const current = await fetchDayEntries(selectedKey);
+  vacations[selectedKey] = current;
+
+  const alreadyBooked = currentUser
+    ? current.some(v => v.telegram_user_id != null && String(v.telegram_user_id) === String(ownerId))
+    : current.some(v => v.name.trim().toLowerCase() === name.toLowerCase());
+  if (alreadyBooked) {
+    renderModalContent(selectedKey, current);
+    nameEl.classList.add('error');
+    errEl.textContent = `${name} уже записан(а) на этот день. Уберите через × выше, если нужно.`;
+    errEl.classList.add('show');
+    haptic('warning');
+    return;
+  }
+
+  if (current.length >= 2) {
+    renderModalContent(selectedKey, current);
+    haptic('warning');
+    return;
+  }
+
+  const confirmBtn = document.getElementById('confirm-btn');
+  const originalLabel = confirmBtn.textContent;
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = 'Сохраняем…';
+
+  try {
+    const entry = await insertVacation(selectedKey, name, ownerId);
+    if (!vacations[selectedKey]) vacations[selectedKey] = [];
+    vacations[selectedKey].push(entry);
+    highlightKey = selectedKey;
+    closeModal();
+    renderCalendar();
+    showToast(`✅ ${name} записан(а) на выходной!`);
+    haptic('success');
+  } catch (e) {
+    console.error(e);
+    errEl.textContent = 'Ошибка сохранения. Попробуйте ещё раз.';
+    errEl.classList.add('show');
+    haptic('error');
+  } finally {
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = originalLabel;
+  }
+}
+
+// Delete a single vacation entry directly from its chip's × button
+async function handleChipRemove(id, name, chipEl) {
+  const ok = await askConfirm(`Убрать выходной для ${name}?`);
+  if (!ok) return;
+
+  chipEl.classList.add('removing');
+  try {
+    await deleteVacation(selectedKey, id);
+    vacations[selectedKey] = (vacations[selectedKey] || []).filter(v => v.id !== id);
+    if (!vacations[selectedKey].length) delete vacations[selectedKey];
+
+    highlightKey = selectedKey;
+    setTimeout(() => {
+      if (selectedKey) renderModalContent(selectedKey, vacations[selectedKey] || []);
+    }, 180);
+    renderCalendar();
+    showToast(`Выходной для ${name} убран`);
+    haptic('success');
+  } catch (e) {
+    console.error(e);
+    chipEl.classList.remove('removing');
+    showToast('Ошибка. Попробуйте ещё раз.');
+    haptic('error');
+  }
+}
+
+// One delegated listener handles clicks on any chip's × button, present or future
+document.getElementById('modal-who').addEventListener('click', function (e) {
+  const btn = e.target.closest('.chip-remove');
+  if (!btn) return;
+  const chip = btn.closest('.who-chip');
+  if (!chip) return;
+  handleChipRemove(chip.dataset.id, chip.dataset.name, chip);
+});
+
+// ═══════════════════════════════════════════════
+// DIARY (chronological, paginated — oldest on top, newest at bottom)
+// ═══════════════════════════════════════════════
+function formatDiaryDate(iso) {
+  const d = new Date(iso);
+  return `${WEEKDAYS_RU[d.getDay()]}, ${d.getDate()} ${MONTHS_RU_GEN[d.getMonth()]}`;
+}
+
+function renderDiary() {
+  document.getElementById('diary-today-label').textContent =
+    `${WEEKDAYS_RU[today.getDay()]}, ${today.getDate()} ${MONTHS_RU_GEN[today.getMonth()]}`;
+
+  const totalPages = Math.max(1, Math.ceil(diaryEntries.length / DIARY_PAGE_SIZE));
+  if (diaryPage > totalPages) diaryPage = totalPages;
+  if (diaryPage < 1) diaryPage = 1;
+
+  const start = (diaryPage - 1) * DIARY_PAGE_SIZE;
+  const pageEntries = diaryEntries.slice(start, start + DIARY_PAGE_SIZE);
+
+  const container = document.getElementById('diary-entries');
+  container.innerHTML = '';
+
+  if (!diaryEntries.length) {
+    container.innerHTML = '<div class="diary-empty">Пока пусто... Напишите первым ✦</div>';
+  } else {
+    pageEntries.forEach((e, i) => {
+      const div = document.createElement('div');
+      div.className = 'diary-entry';
+      div.style.animationDelay = Math.min(i * 40, 220) + 'ms';
+      div.innerHTML = `<div class="diary-entry-date">${formatDiaryDate(e.created_at)}</div>
+        <div class="diary-entry-text">${escHtml(e.text)}</div>`;
+      container.appendChild(div);
+    });
+  }
+
+  renderPagination(totalPages);
+}
+
+function renderPagination(totalPages) {
+  const el = document.getElementById('diary-pagination');
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+
+  let html = '';
+  html += `<button class="page-btn" onclick="goToDiaryPage(1)" ${diaryPage===1?'disabled':''} aria-label="В начало">«</button>`;
+  html += `<button class="page-btn" onclick="goToDiaryPage(${diaryPage-1})" ${diaryPage===1?'disabled':''} aria-label="Назад">‹</button>`;
+
+  const maxShown = 5;
+  let startP = Math.max(1, diaryPage - 2);
+  let endP = Math.min(totalPages, startP + maxShown - 1);
+  startP = Math.max(1, endP - maxShown + 1);
+
+  if (startP > 1) {
+    html += `<button class="page-btn" onclick="goToDiaryPage(1)">1</button>`;
+    if (startP > 2) html += `<span class="page-ellipsis">…</span>`;
+  }
+  for (let p = startP; p <= endP; p++) {
+    html += `<button class="page-btn ${p===diaryPage?'active':''}" onclick="goToDiaryPage(${p})">${p}</button>`;
+  }
+  if (endP < totalPages) {
+    if (endP < totalPages - 1) html += `<span class="page-ellipsis">…</span>`;
+    html += `<button class="page-btn" onclick="goToDiaryPage(${totalPages})">${totalPages}</button>`;
+  }
+
+  html += `<button class="page-btn" onclick="goToDiaryPage(${diaryPage+1})" ${diaryPage===totalPages?'disabled':''} aria-label="Вперёд">›</button>`;
+  html += `<button class="page-btn" onclick="goToDiaryPage(${totalPages})" ${diaryPage===totalPages?'disabled':''} aria-label="В конец">»</button>`;
+
+  el.innerHTML = html;
+}
+
+function goToDiaryPage(p) { diaryPage = p; renderDiary(); haptic('light'); }
+
+async function addDiaryEntry() {
+  const ta = document.getElementById('diary-input');
+  const btn = document.getElementById('diary-add-btn');
+  const text = ta.value.trim();
+  if (!text) return;
+
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Записываем…';
+
+  try {
+    const entry = await insertDiaryEntry(text);
+    diaryEntries.push(entry);
+    ta.value = '';
+    diaryPage = Math.ceil(diaryEntries.length / DIARY_PAGE_SIZE); // jump to last page (newest)
+    renderDiary();
+    showToast('✦ Записано!');
+    haptic('success');
+  } catch (e) {
+    console.error(e);
+    showToast('Ошибка сохранения. Попробуйте ещё раз.');
+    haptic('error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+  }
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+function escAttr(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ═══════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ═══════════════════════════════════════════════
+// REALTIME (only active when Supabase is configured)
+// ═══════════════════════════════════════════════
+function setupRealtime() {
+  if (!USE_SUPABASE) {
+    console.log('Realtime disabled - Supabase not configured');
+    return;
+  }
+
+  try {
+    supabaseClient
+      .channel('public:vacations')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'vacations' },
+        (payload) => {
+          console.log('Vacations changed:', payload);
+          fetchVacations().then(v => {
+            vacations = v;
+            renderCalendar();
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('Vacations subscription status:', status);
+      });
+
+    supabaseClient
+      .channel('public:diary_entries')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'diary_entries' },
+        (payload) => {
+          console.log('Diary changed:', payload);
+          fetchDiary().then(d => {
+            diaryEntries = d;
+            if (document.getElementById('view-diary').classList.contains('active')) renderDiary();
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('Diary subscription status:', status);
+      });
+  } catch (e) {
+    console.error('Realtime setup error:', e);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+async function init() {
+  applyThemeIcon();
+
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+  }
+  currentUser = getTelegramUser();
+
+  if (!USE_SUPABASE) {
+    document.getElementById('config-banner').style.display = 'flex';
+  }
+
+  try { vacations = await fetchVacations(); } catch (e) { console.error(e); vacations = {}; }
+  renderCalendar();
+
+  try { diaryEntries = await fetchDiary(); } catch (e) { console.error(e); diaryEntries = []; }
+  diaryPage = Math.ceil(diaryEntries.length / DIARY_PAGE_SIZE) || 1;
+
+  setupRealtime();
+}
+
+init();
+</script>
+</body>
+</html>
