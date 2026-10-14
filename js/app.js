@@ -15,7 +15,7 @@ const API = "https://api.opendota.com/api";
 // сначала Supabase, затем Cloudflare, потом прямой запрос к OpenDota.
 // Пустая строка означает «мост не настроен» — он просто пропускается,
 // поэтому сайт полностью работоспособен и без них.
-const BRIDGE_SUPABASE = "";
+const BRIDGE_SUPABASE = "https://xxauwkymufehmoprmhay.supabase.co/functions/v1/dota";
 const BRIDGE_CLOUDFLARE = "https://kto-ruina-bridge.wwwgolybfs.workers.dev";
 // Если мост не ответил за это время — сразу откатываемся ниже, а не ждём минуту.
 const BRIDGE_TIMEOUT = 25000;
