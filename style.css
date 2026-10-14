@@ -1,0 +1,344 @@
+/* =========================================================================
+   КТО РУИНА? — стили. Порядок: базовое → шапка → вердикт → панели →
+   игроки → эпизоды → история игры → адаптив.
+   ========================================================================= */
+
+* { box-sizing: border-box }
+
+html { background: #05070b }
+
+body {
+  margin: 0;
+  background: #05070b;
+  color: #eee;
+  font-family: Inter, "Segoe UI", system-ui, Arial, sans-serif;
+  min-height: 100vh;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ------------------------------- фон страницы ----------------------------- */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #05070b }
+.bg:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url('../assets/who-ruined-bg.webp') center center / cover no-repeat;
+}
+/* Тёплый затемняющий оверлей: фон золотой и светлый в центре,
+   поэтому текст держим на ровном тёмном скриме. */
+.bg:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 85% at 50% 0%, rgba(255, 196, 110, .05), transparent 62%),
+    linear-gradient(180deg, rgba(8, 6, 4, .52) 0%, rgba(9, 7, 5, .74) 45%, rgba(4, 3, 2, .93) 100%),
+    linear-gradient(90deg, rgba(6, 7, 12, .52), rgba(8, 7, 6, .16) 45%, rgba(24, 12, 4, .34));
+}
+
+.app { position: relative; z-index: 1; max-width: 1180px; margin: auto; padding: 55px 22px 60px }
+
+/* --------------------------------- шапка --------------------------------- */
+.eyebrow { font-size: 11px; letter-spacing: 3px; color: #8a8f9a; font-weight: 800 }
+h1 {
+  font-size: clamp(44px, 8.5vw, 96px);
+  letter-spacing: -.055em;
+  line-height: .92;
+  margin: 18px 0 15px;
+  font-weight: 950;
+}
+h1 span { color: #ff4545 }
+.lead { max-width: 680px; color: #a2a6b1; font-size: 17px; line-height: 1.5 }
+
+.search { display: flex; gap: 10px; max-width: 760px; margin-top: 30px }
+.search input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(8, 13, 22, .78);
+  border: 1px solid rgba(100, 120, 150, .3);
+  color: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  font-size: 17px;
+  outline: 0;
+}
+.search input:focus { border-color: #4b91f7 }
+.search button {
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #2e7df6, #1f9df0);
+  color: #fff;
+  font-weight: 900;
+  padding: 0 25px;
+  cursor: pointer;
+  box-shadow: 0 8px 28px rgba(23, 108, 230, .22);
+}
+.search button:disabled { opacity: .6; cursor: progress }
+
+.statusRow { display: flex; align-items: center; gap: 10px; margin-top: 12px }
+.status { flex: 1; min-height: 20px; color: #8a8f99; font-size: 13px }
+
+.telegram {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 18px;
+  padding: 10px 15px;
+  border: 1px solid rgba(83, 151, 255, .38);
+  border-radius: 10px;
+  background: rgba(14, 27, 48, .68);
+  color: #dbeaff;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+}
+.telegram:hover { background: rgba(22, 49, 83, .82); border-color: rgba(83, 151, 255, .65); transform: translateY(-1px) }
+.telegramIcon {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #2498ef;
+  color: #fff;
+  font-size: 10px;
+}
+.authorCaption { display: block; margin-top: 5px; color: #7c828e; font-size: 9px; letter-spacing: .2px }
+
+/* --------------------------- предупреждения и кнопки ---------------------- */
+.notice { margin-top: 14px }
+.notice.hidden { display: none }
+.noticeBox { border: 1px solid #2a2f3a; border-radius: 14px; padding: 14px 16px; background: rgba(10, 13, 20, .84) }
+.noticeBox.warn { border-color: rgba(255, 180, 91, .42); background: linear-gradient(135deg, rgba(255, 180, 91, .07), rgba(10, 13, 20, .88)) }
+.noticeBox.bad { border-color: rgba(255, 90, 90, .45); background: linear-gradient(135deg, rgba(255, 69, 69, .08), rgba(10, 13, 20, .88)) }
+.noticeBox.info { border-color: rgba(110, 160, 230, .35) }
+.noticeHead { font-size: 13.5px; line-height: 1.4 }
+.noticeBox p { margin: 8px 0 0; color: #a9aeb9; font-size: 13px; line-height: 1.5 }
+.noticeActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px }
+
+.btnGhost, .btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  padding: 9px 14px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.btnGhost {
+  border: 1px solid rgba(120, 140, 170, .32);
+  background: rgba(10, 14, 22, .72);
+  color: #cbd3e0;
+}
+.btnGhost:hover { border-color: rgba(120, 140, 170, .6); color: #fff; transform: translateY(-1px) }
+.btnPrimary { border: 0; background: linear-gradient(135deg, #2e7df6, #1f9df0); color: #fff }
+.btnPrimary:hover { filter: brightness(1.08) }
+
+/* -------------------------------- вердикт -------------------------------- */
+.verdict, .panel {
+  background: rgba(8, 11, 17, .84);
+  border: 1px solid rgba(105, 120, 145, .24);
+  border-radius: 18px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .22);
+}
+.verdict { padding: 27px; margin-top: 35px; overflow: hidden }
+.verdict-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 30px; align-items: start }
+.verdict h2 { font-size: 34px; margin: 8px 0 }
+.confidence { color: #7bd59a; margin-top: 4px; font-size: 13px; font-weight: 700 }
+/* цвет надёжности: чем меньше уверенность, тем «тревожнее» оттенок */
+.confidence.q-minimal { color: #78d39a }
+.confidence.q-low { color: #d8c66b }
+.confidence.q-moderate { color: #ffb45b }
+.confidence.q-high, .confidence.q-very-high { color: #ff8f8f }
+.summary { color: #a8abb4; line-height: 1.6 }
+.verdictCopy { padding-top: 2px }
+.verdictCopy p { color: #b5b8c1; line-height: 1.65; margin: 0 0 13px; font-size: 15px }
+.verdictCopy p strong { color: #fff }
+.verdictCaveat { border-left: 2px solid #ffb45b; padding-left: 11px; color: #c9bda6 !important; font-size: 13.5px !important }
+.vmetrics { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 16px 0 }
+.vmetric { background: #111319; border: 1px solid #242730; border-radius: 11px; padding: 11px }
+.vmetric span { display: block; color: #777b86; font-size: 10px; text-transform: uppercase; letter-spacing: 1px }
+.vmetric b { display: block; font-size: 15px; margin-top: 4px; color: #eee }
+.vmetric small { display: block; color: #737782; font-size: 10px; margin-top: 3px }
+.verdictReasons h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: #8a8e98; margin: 14px 0 8px }
+.verdictReasons ul, .nearReasons { list-style: none; padding: 0; margin: 0; display: grid; gap: 7px }
+.verdictReasons li, .nearReasons li { background: #111319; border-left: 2px solid #ff4545; border-radius: 9px; padding: 9px 11px }
+.verdictReasons li b, .nearReasons li b { display: block; font-size: 12px }
+.verdictReasons li span, .nearReasons li span { display: block; color: #858993; font-size: 11px; line-height: 1.4; margin-top: 2px }
+.verdictActions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px }
+
+.verdictHero img { width: 88px; height: 88px; object-fit: cover; border-radius: 10px; display: block; margin-bottom: 8px; background: #20232a }
+.verdictRank { display: flex; align-items: center; gap: 8px; margin: 4px 0 8px }
+.verdictRank img { width: 38px; height: 38px; object-fit: contain }
+
+.impact { margin-top: 10px }
+.impactLabel { display: block; color: #777b86; font-size: 10px; text-transform: uppercase; letter-spacing: 1.3px; font-weight: 900 }
+.impactValue { display: inline-block; margin-top: 5px; font-size: 24px; font-weight: 950 }
+.impactValue.very-high, .impactValue.high { color: #ff5b5b }
+.impactValue.moderate { color: #ffb45b }
+.impactValue.low { color: #d8c66b }
+.impactValue.minimal { color: #78d39a }
+
+/* --------------------------- близкий к руину игрок ----------------------- */
+.nearRuiner {
+  margin-top: 18px;
+  background: linear-gradient(135deg, rgba(255, 69, 69, .08), rgba(255, 255, 255, .015));
+  border: 1px solid #3a2930;
+  border-radius: 14px;
+  padding: 15px;
+}
+.nearHead { display: grid; grid-template-columns: 48px 1fr auto; gap: 11px; align-items: center }
+.nearHead img { width: 48px; height: 48px; border-radius: 9px; object-fit: cover; background: #20232a }
+.nearLabel { font-size: 9px; letter-spacing: 1.7px; color: #ff8d8d; font-weight: 900 }
+.nearHead h3 { font-size: 17px; margin: 3px 0 0 }
+.nearHead p { margin: 2px 0 0; color: #888c96; font-size: 11px }
+.nearHead > strong { font-size: 30px; color: #ff7777 }
+.nearStats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin: 12px 0 }
+.nearStats span { background: #0d0f13; border-radius: 8px; padding: 7px; color: #777b86; font-size: 10px }
+.nearStats b { color: #eee; margin-left: 3px }
+.nearEmpty { color: #777b86; font-size: 12px }
+.nearReasons { grid-template-columns: repeat(3, 1fr) }
+.nearReasons li { border-left-color: #9a4d55 }
+.nearReasons li b { font-size: 11px }
+
+/* -------------------------------- панели -------------------------------- */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px }
+.panel { padding: 22px; margin-top: 15px }
+.grid .panel { margin-top: 0 }
+.wide { grid-column: 1 / -1 }
+.panel-title { font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #777b86; font-weight: 900; margin-bottom: 14px }
+.panel-title span { color: #75d69b }
+
+.ov { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px }
+.ov div { background: #111319; border: 1px solid #22252d; border-radius: 12px; padding: 14px }
+.ov span { display: block; color: #777b86; font-size: 11px; text-transform: uppercase; letter-spacing: 1px }
+.ov b { display: block; font-size: 20px; margin-top: 6px }
+
+/* чипы качества данных */
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px }
+.chip { font-size: 10px; padding: 5px 9px; border-radius: 999px; border: 1px solid; font-weight: 700 }
+.chip.ok { color: #79d69c; border-color: rgba(105, 213, 148, .35); background: rgba(60, 150, 100, .1) }
+.chip.no { color: #ff9a9a; border-color: rgba(255, 120, 120, .28); background: rgba(150, 60, 60, .1) }
+
+/* ------------------------------- игроки -------------------------------- */
+.playerCard { padding: 16px 0; border-bottom: 1px solid #20232a }
+.playerCard:last-child { border: 0 }
+.playerCard.culprit { background: linear-gradient(90deg, rgba(255, 69, 69, .08), transparent); padding: 16px; border-radius: 12px }
+.playerHead { display: grid; grid-template-columns: 52px 1fr auto; gap: 12px; align-items: center }
+.heroIcon { width: 52px; height: 52px; border-radius: 10px; object-fit: cover; background: #252832 }
+.pname { font-weight: 800 }
+.heroName { color: #ffb3b3; font-size: 12px; margin-top: 3px }
+.heroName b { font-weight: 700 }
+.heroName small { opacity: .55; font-size: 10px }
+.pScore { font-size: 24px; font-weight: 950; color: #ff5555 }
+.statgrid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; margin: 13px 0 }
+.statgrid span { background: #111319; border-radius: 8px; padding: 8px; color: #777b86; font-size: 10px }
+.statgrid b { display: block; color: #eee; font-size: 13px; margin-top: 3px }
+.build { display: flex; align-items: center; gap: 7px; color: #777b86; font-size: 11px; flex-wrap: wrap }
+.build img { width: 34px; height: 34px; border-radius: 7px; object-fit: cover; background: #20232a; border: 1px solid #2b2f38 }
+.build em { font-style: normal }
+
+/* ------------------------- победившая команда --------------------------- */
+.winnerPanel { border-color: rgba(90, 190, 130, .25) }
+.winnerPlayer { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #202a25 }
+.winnerPlayer:last-child { border-bottom: 0 }
+.winnerPlayerMain b, .winnerPlayerMain span, .winnerPlayerMain small { display: block }
+.winnerPlayerMain b { font-size: 14px }
+.winnerPlayerMain span { font-size: 12px; color: #a0d7b4; margin-top: 3px }
+.winnerPlayerMain small { font-size: 11px; color: #828b87; margin-top: 5px }
+.winnerPlayer > strong { font-size: 13px; color: #7bd59a; white-space: nowrap }
+
+/* ------------------------------ эпизоды -------------------------------- */
+.event { padding: 14px 15px; border: 1px solid #242730; border-radius: 12px; margin-bottom: 9px }
+.event:not(.danger) { border-color: #273a31 }
+.event.danger { border-color: #5a2b31 }
+.event > b { display: block; font-size: 14px }
+.eventTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px }
+.eventTime { font-size: 11px; color: #777b86; font-weight: 800 }
+.eventTag { font-size: 8px; letter-spacing: 1px; color: #72d79a; border: 1px solid #31523e; border-radius: 999px; padding: 4px 7px; font-weight: 900 }
+.eventTag.bad { color: #ff9a9a; border-color: #603139 }
+.eventWhat, .eventWhy { font-size: 12px; line-height: 1.45; color: #9b9faa; margin-top: 7px }
+.eventWhat strong, .eventWhy strong { color: #d9dbe0 }
+.eventWhy { padding-top: 7px; border-top: 1px solid #20232a }
+.eventPlayer { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px }
+.eventPlayer img { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; background: #20232a; border: 1px solid #303541 }
+.eventPlayer strong { display: block; font-size: 13px; color: #eee }
+.eventPlayer span { display: block; color: #8d929e; font-size: 11px; margin-top: 2px }
+.empty { color: #777b86; padding: 15px 0; font-size: 13px; line-height: 1.5 }
+
+/* -------------------------- история игры по фазам ---------------------- */
+.storyPanel { overflow: hidden }
+.storyNote { color: #8d929e; font-size: 12px; line-height: 1.5; margin-bottom: 12px; padding: 10px 12px; background: #111319; border-radius: 10px; border-left: 2px solid #555b67 }
+.storyGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.phases { display: grid; gap: 8px; grid-row: span 2 }
+.phase, .turning, .lesson, .innocence { background: #111319; border: 1px solid #242730; border-radius: 12px; padding: 14px }
+.phaseHead { display: flex; justify-content: space-between; align-items: center; gap: 8px }
+.phaseHead b { font-size: 14px }
+.phaseHead span, .phase small { color: #777b86; font-size: 10px }
+.phase p { margin: 8px 0 5px; color: #9b9faa; font-size: 12px; line-height: 1.45 }
+.phase.bad { border-left: 3px solid #ff5353 }
+.phase.good { border-left: 3px solid #69d594 }
+.phase.neutral { border-left: 3px solid #555b67 }
+.turning { border-color: #573139; background: linear-gradient(135deg, rgba(255, 69, 69, .08), #111319) }
+.storyLabel { font-size: 9px; letter-spacing: 1.5px; color: #ff8585; font-weight: 900 }
+.goodLabel { color: #70d69a }
+.turning h3, .lesson h3, .innocence h3 { font-size: 16px; margin: 8px 0 4px }
+.turnTime { font-size: 12px; color: #ff9b9b; font-weight: 900 }
+.turning p, .lesson p, .innocence p { color: #9b9faa; font-size: 12px; line-height: 1.5; margin: 9px 0 }
+.turning > b { display: block; color: #ddd; font-size: 11px; line-height: 1.45 }
+.lesson { border-color: #39452e }
+.nextGame { margin-top: 10px; padding: 10px; background: #0d0f13; border-radius: 9px }
+.nextGame span { display: block; color: #777b86; font-size: 9px; text-transform: uppercase; letter-spacing: 1px }
+.nextGame b { display: block; color: #ddd; font-size: 11px; margin-top: 4px; line-height: 1.4 }
+.innocence { border-color: #294235; background: linear-gradient(135deg, rgba(83, 199, 126, .05), #111319); grid-column: 1 / -1 }
+
+/* ------------------------------- причины -------------------------------- */
+.reasons { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px }
+.reason { padding: 15px; background: #111319; border-radius: 12px; border-left: 3px solid #ff4545 }
+.reason strong { display: block; font-size: 13px }
+.reason span { color: #969aa4; font-size: 13px; line-height: 1.45 }
+
+/* -------------------------------- подвал -------------------------------- */
+.foot { margin-top: 30px; color: #6f747f; font-size: 12px; line-height: 1.6; text-align: center }
+.foot a { color: #8fb6ee; text-decoration: none }
+.foot a:hover { text-decoration: underline }
+
+/* ------------------------------ доступность ----------------------------- */
+:focus-visible { outline: 2px solid #4b91f7; outline-offset: 2px }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important }
+  .telegram:hover, .btnGhost:hover { transform: none }
+}
+
+/* -------------------------------- адаптив ------------------------------- */
+@media (max-width: 900px) {
+  .statgrid { grid-template-columns: repeat(3, 1fr) }
+  .ov { grid-template-columns: repeat(3, 1fr) }
+}
+@media (max-width: 750px) {
+  .search, .verdict-grid, .grid { display: flex; flex-direction: column }
+  .search button { height: 54px }
+  .reasons { grid-template-columns: 1fr }
+  .app { padding-top: 35px }
+  .vmetrics, .nearReasons, .nearStats { grid-template-columns: 1fr }
+  .storyGrid { grid-template-columns: 1fr }
+  .phases { grid-row: auto }
+  .verdictActions .btnGhost, .noticeActions .btnGhost, .noticeActions .btnPrimary { width: 100%; justify-content: center }
+}
+@media (max-width: 550px) {
+  .statgrid, .ov { grid-template-columns: repeat(2, 1fr) }
+  .winnerPlayer { grid-template-columns: 42px 1fr }
+  .winnerPlayer .heroIcon { width: 42px; height: 42px }
+  .winnerPlayer > strong { grid-column: 2 }
+  .verdict { padding: 20px }
+}
+
+/* -------------------------------- утилиты ------------------------------- */
+/* Правило обязано стоять последним: иначе display у компонентов
+   (например, .btnGhost у кнопки «Отмена») перебивает скрытие. */
+.hidden { display: none }
