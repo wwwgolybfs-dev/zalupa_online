@@ -760,24 +760,48 @@ function matchStory(m, all, culprit, avail) {
 }
 
 /* --------------------- карта башен в конце игры --------------------------- */
-const MAP_SIZE = 720;
-
-// Позиции зданий Radiant; Dire — зеркально относительно диагонали.
-const RADIANT_POS = {
-  ancient: [150, 620],
-  tower4: [[116, 582], [184, 582]],
-  tower: {
-    bot: { 1: [250, 662], 2: [378, 682], 3: [508, 692] },
-    mid: { 1: [252, 312], 2: [326, 386], 3: [402, 462] },
-    top: { 1: [62, 312], 2: [86, 222], 3: [132, 148] },
-  },
-  barracks: {
-    bot: { melee: [168, 680], range: [198, 692] },
-    mid: { melee: [198, 556], range: [228, 566] },
-    top: { melee: [104, 500], range: [134, 506] },
-  },
-};
-function mirrorPos(p) { return [MAP_SIZE - p[1], MAP_SIZE - p[0]]; }
+/* Позиции зданий как на миникарте OpenDota (BuildingMap/buildingData.ts):
+   координаты в % от карты (x = left, y = top). Radiant = bottom-left, Dire = top-right. */
+const MAP_BUILDINGS = [
+  // Radiant
+  { team: "radiant", key: "tower4", x: 12, y: 82, kind: "t4" },
+  { team: "radiant", key: "tower4", x: 8, y: 79, kind: "t4" },
+  { team: "radiant", key: "tower3_bot", x: 23, y: 83.5, kind: "tower", lane: "bot", tier: 3 },
+  { team: "radiant", key: "tower2_bot", x: 46, y: 85, kind: "tower", lane: "bot", tier: 2 },
+  { team: "radiant", key: "tower1_bot", x: 78, y: 83, kind: "tower", lane: "bot", tier: 1 },
+  { team: "radiant", key: "tower3_mid", x: 18, y: 71, kind: "tower", lane: "mid", tier: 3 },
+  { team: "radiant", key: "tower2_mid", x: 27, y: 63, kind: "tower", lane: "mid", tier: 2 },
+  { team: "radiant", key: "tower1_mid", x: 38, y: 54, kind: "tower", lane: "mid", tier: 1 },
+  { team: "radiant", key: "tower3_top", x: 7, y: 68, kind: "tower", lane: "top", tier: 3 },
+  { team: "radiant", key: "tower2_top", x: 8, y: 51, kind: "tower", lane: "top", tier: 2 },
+  { team: "radiant", key: "tower1_top", x: 8, y: 35, kind: "tower", lane: "top", tier: 1 },
+  { team: "radiant", key: "range_rax_bot", x: 20, y: 80.5, kind: "range", lane: "bot" },
+  { team: "radiant", key: "melee_rax_bot", x: 20, y: 84.5, kind: "melee", lane: "bot" },
+  { team: "radiant", key: "range_rax_mid", x: 15, y: 70.5, kind: "range", lane: "mid" },
+  { team: "radiant", key: "melee_rax_mid", x: 18, y: 73, kind: "melee", lane: "mid" },
+  { team: "radiant", key: "range_rax_top", x: 5.5, y: 70.5, kind: "range", lane: "top" },
+  { team: "radiant", key: "melee_rax_top", x: 9.5, y: 70.5, kind: "melee", lane: "top" },
+  { team: "radiant", key: "fort", x: 5, y: 83, kind: "ancient" },
+  // Dire
+  { team: "dire", key: "tower4", x: 84, y: 16, kind: "t4" },
+  { team: "dire", key: "tower4", x: 81, y: 13, kind: "t4" },
+  { team: "dire", key: "tower3_bot", x: 86, y: 28, kind: "tower", lane: "bot", tier: 3 },
+  { team: "dire", key: "tower2_bot", x: 86, y: 45, kind: "tower", lane: "bot", tier: 2 },
+  { team: "dire", key: "tower1_bot", x: 86, y: 60, kind: "tower", lane: "bot", tier: 1 },
+  { team: "dire", key: "tower3_mid", x: 73, y: 24, kind: "tower", lane: "mid", tier: 3 },
+  { team: "dire", key: "tower2_mid", x: 63, y: 34, kind: "tower", lane: "mid", tier: 2 },
+  { team: "dire", key: "tower1_mid", x: 53, y: 44, kind: "tower", lane: "mid", tier: 1 },
+  { team: "dire", key: "tower3_top", x: 70, y: 11, kind: "tower", lane: "top", tier: 3 },
+  { team: "dire", key: "tower2_top", x: 44, y: 10, kind: "tower", lane: "top", tier: 2 },
+  { team: "dire", key: "tower1_top", x: 15, y: 10, kind: "tower", lane: "top", tier: 1 },
+  { team: "dire", key: "range_rax_bot", x: 84.5, y: 24, kind: "range", lane: "bot" },
+  { team: "dire", key: "melee_rax_bot", x: 88.5, y: 24, kind: "melee", lane: "bot" },
+  { team: "dire", key: "range_rax_mid", x: 74.5, y: 19.5, kind: "range", lane: "mid" },
+  { team: "dire", key: "melee_rax_mid", x: 77.5, y: 22, kind: "melee", lane: "mid" },
+  { team: "dire", key: "range_rax_top", x: 74, y: 8, kind: "range", lane: "top" },
+  { team: "dire", key: "melee_rax_top", x: 74, y: 12, kind: "melee", lane: "top" },
+  { team: "dire", key: "fort", x: 84, y: 9, kind: "ancient" },
+];
 
 /* building_kill → { radiant: {suffix: [времена]}, dire: {...} } */
 function buildingKills(m) {
@@ -799,60 +823,65 @@ function towerMapHtml(m) {
   }
 
   const kills = buildingKills(m);
-  const parts = [];
-
-  // река по диагонали
-  parts.push(`<line x1="0" y1="${MAP_SIZE}" x2="${MAP_SIZE}" y2="0" stroke="#12303f" stroke-width="40" stroke-linecap="round" opacity="0.45"/>`);
-  parts.push(`<text x="132" y="712" fill="#7cc48c" font-size="13" font-weight="700" text-anchor="middle" opacity="0.85">RADIANT</text>`);
-  parts.push(`<text x="${MAP_SIZE - 132}" y="26" fill="#e08b74" font-size="13" font-weight="700" text-anchor="middle" opacity="0.85">DIRE</text>`);
-
-  const towerMark = (x, y, team, destroyed, tSec, label) => {
-    const fill = destroyed ? "#33383f" : team === "radiant" ? "#57b26a" : "#d05941";
-    const stroke = destroyed ? "#565b63" : team === "radiant" ? "#8fe0a0" : "#ff9a85";
-    const tip = destroyed ? `${label} — снесена на ${time(tSec)}` : `${label} — цела`;
-    return `<circle cx="${x}" cy="${y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="2"><title>${esc(tip)}</title></circle>${destroyed ? `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11" fill="#f2b3a6">✕</text>` : ""}`;
-  };
-  const barrackMark = (x, y, team, destroyed, tSec, label) => {
-    const fill = destroyed ? "#33383f" : team === "radiant" ? "#3f8f50" : "#a04330";
-    const stroke = destroyed ? "#565b63" : team === "radiant" ? "#8fe0a0" : "#ff9a85";
-    const tip = destroyed ? `${label} — снесён на ${time(tSec)}` : `${label} — цел`;
-    return `<rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5"><title>${esc(tip)}</title></rect>${destroyed ? `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="10" fill="#f2b3a6">✕</text>` : ""}`;
-  };
-
-  const lanes = ["bot", "mid", "top"];
+  // Очередь времён сноса по ключу (у двух T4 общий ключ «tower4»).
+  const queues = { radiant: {}, dire: {} };
   for (const team of ["radiant", "dire"]) {
-    const px = p => (team === "radiant" ? p : mirrorPos(p));
-    const dt = suffix => (((kills[team] || {})[suffix] || [])[0] || null);
-
-    // древний (fort = основное здание)
-    const anc = px(RADIANT_POS.ancient);
-    const ancDead = !!(dt("fort") || dt("ancient"));
-    parts.push(`<rect x="${anc[0] - 16}" y="${anc[1] - 16}" width="32" height="32" rx="6" transform="rotate(45 ${anc[0]} ${anc[1]})" fill="${ancDead ? "#33383f" : "#b98a2e"}" stroke="${ancDead ? "#565b63" : "#c9a14a"}" stroke-width="2"><title>${esc((team === "radiant" ? "Radiant" : "Dire") + " древний — " + (ancDead ? "разрушен" : "цел"))}</title></rect>`);
-
-    // T4 (две башни у древнего)
-    RADIANT_POS.tower4.forEach((tp, i) => {
-      const p = px(tp);
-      const t = ((kills[team] || {}).tower4 || [])[i] || null;
-      parts.push(towerMark(p[0], p[1], team, !!t, t, `${team} T4 #${i + 1}`));
-    });
-
-    // башни T1–T3
-    for (const lane of lanes) for (const tier of [1, 2, 3]) {
-      const p = px(RADIANT_POS.tower[lane][tier]);
-      const t = dt(`tower${tier}_${lane}`);
-      parts.push(towerMark(p[0], p[1], team, !!t, t, `${team} ${lane} T${tier}`));
+    for (const [key, times] of Object.entries(kills[team] || {})) {
+      queues[team][key] = [...times].sort((a, b) => a - b);
     }
+  }
+  const nextKill = (team, key) => { const q = queues[team][key]; return q && q.length ? q.shift() : null; };
 
-    // бараки
-    for (const lane of lanes) for (const type of ["melee", "range"]) {
-      const p = px(RADIANT_POS.barracks[lane][type]);
-      const t = dt(`${type}_rax_${lane}`);
-      parts.push(barrackMark(p[0], p[1], team, !!t, t, `${team} ${lane} ${type === "melee" ? "melee" : "ranged"} барак`));
+  const laneRu = { bot: "бот", mid: "мид", top: "топ" };
+  const label = b => {
+    const side = b.team === "radiant" ? "Radiant" : "Dire";
+    if (b.kind === "ancient") return `${side} · древний`;
+    if (b.kind === "t4") return `${side} · T4 у древнего`;
+    if (b.kind === "tower") return `${side} · ${laneRu[b.lane]} · T${b.tier}`;
+    return `${side} · ${laneRu[b.lane]} · ${b.kind === "melee" ? "melee" : "ranged"} барак`;
+  };
+
+  const parts = [];
+  // река (диагональ верхний-левый → нижний-правый)
+  parts.push(`<path d="M 0 0 C 28 20, 72 80, 100 100" stroke="#0e2836" stroke-width="14" fill="none" opacity="0.5"/>`);
+  parts.push(`<path d="M 0 0 C 28 20, 72 80, 100 100" stroke="#2f5868" stroke-width="2.4" fill="none" opacity="0.45" stroke-dasharray="1.5 2.5"/>`);
+
+  // лейны (тонкие пути)
+  const lanePaths = [
+    "M 5 83 L 7 68 L 8 51 L 8 35 L 15 10 L 44 10 L 70 11 L 84 9",      // top
+    "M 5 83 L 23 83.5 L 46 85 L 78 83 L 86 60 L 86 45 L 86 28 L 84 9",  // bot
+    "M 5 83 L 18 71 L 27 63 L 38 54 L 53 44 L 63 34 L 73 24 L 84 9",    // mid
+  ];
+  for (const d of lanePaths) parts.push(`<path d="${d}" stroke="#2a3745" stroke-width="1.4" fill="none" opacity="0.55"/>`);
+
+  // базы (фонтан)
+  parts.push(`<circle cx="5" cy="83" r="6.5" fill="#1c2a24" stroke="#3f8f50" stroke-width="0.8" opacity="0.55"/>`);
+  parts.push(`<circle cx="84" cy="9" r="6.5" fill="#2a1f1c" stroke="#a04330" stroke-width="0.8" opacity="0.55"/>`);
+
+  // здания
+  for (const b of MAP_BUILDINGS) {
+    const t = nextKill(b.team, b.key);
+    const dead = t !== null;
+    const fill = dead ? "#3a3f47" : b.team === "radiant" ? "#57b26a" : "#d05941";
+    const stroke = dead ? "#565b63" : b.team === "radiant" ? "#8fe0a0" : "#ff9a85";
+    const tip = `${label(b)} — ${dead ? "снесён на " + time(t) : "цел"}`;
+
+    if (b.kind === "ancient") {
+      parts.push(`<rect x="${b.x - 2.3}" y="${b.y - 2.3}" width="4.6" height="4.6" rx="1" transform="rotate(45 ${b.x} ${b.y})" fill="${dead ? "#3a3f47" : "#b98a2e"}" stroke="${dead ? "#565b63" : "#c9a14a"}" stroke-width="0.9"><title>${esc(tip)}</title></rect>`);
+    } else if (b.kind === "tower") {
+      parts.push(`<circle cx="${b.x}" cy="${b.y}" r="2.3" fill="${fill}" stroke="${stroke}" stroke-width="0.7"><title>${esc(tip)}</title></circle>${dead ? `<text x="${b.x}" y="${b.y + 0.9}" text-anchor="middle" font-size="2.4" fill="#f2b3a6">✕</text>` : ""}`);
+    } else if (b.kind === "t4") {
+      parts.push(`<rect x="${b.x - 1.6}" y="${b.y - 1.6}" width="3.2" height="3.2" rx="0.7" transform="rotate(45 ${b.x} ${b.y})" fill="${fill}" stroke="${stroke}" stroke-width="0.6"><title>${esc(tip)}</title></rect>${dead ? `<text x="${b.x}" y="${b.y + 0.9}" text-anchor="middle" font-size="2.2" fill="#f2b3a6">✕</text>` : ""}`);
+    } else {
+      parts.push(`<rect x="${b.x - 1.3}" y="${b.y - 1.3}" width="2.6" height="2.6" rx="0.5" fill="${dead ? "#3a3f47" : b.team === "radiant" ? "#3f8f50" : "#a04330"}" stroke="${dead ? "#565b63" : b.team === "radiant" ? "#8fe0a0" : "#ff9a85"}" stroke-width="0.5"><title>${esc(tip)}</title></rect>${dead ? `<text x="${b.x}" y="${b.y + 0.9}" text-anchor="middle" font-size="2.2" fill="#f2b3a6">✕</text>` : ""}`);
     }
   }
 
-  const legend = `<div class="mapLegend"><span class="lg"><i style="background:#57b26a"></i>Radiant</span><span class="lg"><i style="background:#d05941"></i>Dire</span><span class="lg"><i style="background:#33383f"></i>Сломано (✕)</span><span class="lg">Наведи на значок — время сноса</span></div>`;
-  return `<svg class="towerMap" viewBox="0 0 ${MAP_SIZE} ${MAP_SIZE}" role="img" aria-label="Карта башен в конце игры">${parts.join("")}</svg>${legend}`;
+  parts.push(`<text x="17" y="98" fill="#7cc48c" font-size="3.3" font-weight="700" text-anchor="middle" opacity="0.85">RADIANT</text>`);
+  parts.push(`<text x="83" y="6" fill="#e08b74" font-size="3.3" font-weight="700" text-anchor="middle" opacity="0.85">DIRE</text>`);
+
+  const legend = `<div class="mapLegend"><span class="lg"><i style="background:#57b26a"></i>Radiant</span><span class="lg"><i style="background:#d05941"></i>Dire</span><span class="lg"><i style="background:#3a3f47"></i>Сломано (✕)</span><span class="lg">Наведи на значок — время сноса</span></div>`;
+  return `<svg class="towerMap" viewBox="0 0 100 100" role="img" aria-label="Карта башен в конце игры">${parts.join("")}</svg>${legend}`;
 }
 
 /* ------------------------------- отрисовка -------------------------------- */
