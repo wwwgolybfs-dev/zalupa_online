@@ -57,6 +57,7 @@ export default {
       return json({ error: "Разрешены только matches/{id}, request/{id}, players/{id}" }, 403);
     }
 
+    const t0 = Date.now();
     const force = url.searchParams.get("force") === "1";
     const isGet = request.method === "GET";
     const cleanUrl = `${UPSTREAM}/${path}`;
@@ -80,24 +81,64 @@ export default {
     }
 
     // 2) идём в OpenDota из сети Cloudflare
-    const headers = { "User-Agent": "kto-ruina-bridge" };
+    // Accept-Encoding: identity — чтобы тело было несжатым и с ним не было
+    // путаницы при кешировании (Cloudflare сжимает ответ клиенту сам).
+    const headers = { "User-Agent": "kto-ruina-bridge", "Accept-Encoding": "identity" };
     if (key) headers["Authorization"] = `Bearer ${key}`;
 
     const upstream = await fetch(fetchUrl, { method: request.method, headers });
+    const upstreamMs = Date.now() - t0;
 
-    // 3) отдаём тело потоком, не читая его (экономия CPU)
-    const response = new Response(upstream.body, {
+    // Диагностика: ?probe=1 замеряет плечо Cloudflare -> OpenDota,
+    // но не пересылает большое тело клиенту.
+    if (url.searchParams.get("probe") === "1") {
+      const buf = await upstream.arrayBuffer();
+      return json({
+        status: upstream.status,
+        upstreamMs,
+        totalMs: Date.now() - t0,
+        bytes: buf.byteLength,
+        keyed: !!key,
+        colo: request.cf && request.cf.colo,
+      });
+    }
+
+    // 3) Чистим заголовки перед отдачей и кешированием:
+    //    - set-cookie: OpenDota ставит сессионную куку, а Cloudflare НЕ кеширует
+    //      ответы с set-cookie (из-за этого кеш раньше не наполнялся вообще);
+    //    - access-control-allow-credentials: true конфликтует с ACAO "*",
+    //      и браузер вправе отклонить такой ответ;
+    //    - transfer-encoding/connection: рантайм Workers сам размечает поток,
+    //      а скопированный chunked приводил к обрыву тела на середине ответа.
+    const outHeaders = new Headers(upstream.headers);
+    for (const h of [
+      "set-cookie", "vary", "content-encoding", "content-length",
+      "transfer-encoding", "connection", "keep-alive",
+      "access-control-allow-credentials", "access-control-allow-origin",
+      "access-control-allow-methods", "access-control-allow-headers", "access-control-max-age",
+      "cf-cache-status", "cf-ray", "nel", "report-to", "alt-svc",
+    ]) {
+      outHeaders.delete(h);
+    }
+    for (const [k, v] of Object.entries(CORS)) outHeaders.set(k, v);
+    outHeaders.set("Cache-Control", isGet ? `public, max-age=${CACHE_TTL}` : "no-store");
+
+    // Тело читаем целиком, чтобы и кеш, и клиент получали корректно
+    // размеченный ответ (потоковая отдача из кеша обрывалась на середине).
+    const body = await upstream.arrayBuffer();
+    const response = new Response(body, {
       status: upstream.status,
       statusText: upstream.statusText,
-      headers: upstream.headers,
+      headers: outHeaders,
     });
-    for (const [k, v] of Object.entries(CORS)) response.headers.set(k, v);
-    response.headers.set("Cache-Control", isGet ? `public, max-age=${CACHE_TTL}` : "no-store");
-    response.headers.set("X-Bridge", "upstream");
 
+    // Кеш кладём в фоне (ctx.waitUntil): отдача ответа клиенту не должна
+    // ждать кеширования. Раньше await cache.put() блокировал запрос на
+    // больших телах — клиент висел до таймаута.
     if (isGet && upstream.ok) {
-      ctx.waitUntil(cache.put(cacheKey, response.clone()));
+      ctx.waitUntil(cache.put(cacheKey, new Response(body, { status: upstream.status, headers: outHeaders })));
     }
+    response.headers.set("X-Bridge", "upstream");
     return response;
   },
 };

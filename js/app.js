@@ -11,10 +11,14 @@
 
 /* ------------------------------- конфигурация ------------------------------ */
 const API = "https://api.opendota.com/api";
-// Мост к OpenDota через Cloudflare Workers (см. bridge/README.md).
-// Пустая строка — ходим в OpenDota напрямую. Если мост указан, но недоступен,
-// сайт сам откатывается на прямой запрос, поэтому без моста он тоже работает.
-const BRIDGE = "";
+// Мосты к OpenDota (см. bridge/README.md). Порядок = приоритет:
+// сначала Supabase, затем Cloudflare, потом прямой запрос к OpenDota.
+// Пустая строка означает «мост не настроен» — он просто пропускается,
+// поэтому сайт полностью работоспособен и без них.
+const BRIDGE_SUPABASE = "";
+const BRIDGE_CLOUDFLARE = "https://kto-ruina-bridge.wwwgolybfs.workers.dev";
+// Если мост не ответил за это время — сразу откатываемся ниже, а не ждём минуту.
+const BRIDGE_TIMEOUT = 25000;
 const OPENDOTA_MATCH = "https://www.opendota.com/matches";
 const T = { match: 60000, request: 15000, poll: 20000 };
 const PARSE_POLL = { interval: 10000, attempts: 18 };  // ~3 минуты ожидания парсинга
@@ -84,18 +88,21 @@ async function fetchJSON(url, opts = {}) {
   throw lastErr || new Error("Не удалось получить данные.");
 }
 
-/* Запрос к OpenDota через мост (Cloudflare Workers) с откатом на прямой API.
+/* Запрос к OpenDota через мосты с откатом: Supabase → Cloudflare → напрямую.
    path — без ведущего слэша, например "matches/123456". */
 async function apiFetch(path, opts = {}) {
   const direct = () => fetchJSON(`${API}/${path}`, opts);
-  if (!BRIDGE) return direct();
-  try {
-    return await fetchJSON(`${BRIDGE}/${path}`, opts);
-  } catch (err) {
-    if (err && err.message === "Отменено") throw err;
-    // Мост недоступен (или упал) — работаем напрямую, чтобы сайт не ломался.
-    return direct();
+  for (const base of [BRIDGE_SUPABASE, BRIDGE_CLOUDFLARE]) {
+    if (!base) continue;
+    try {
+      // retries: 0 и короткий таймаут — чтобы нерабочий мост не тормозил разбор
+      return await fetchJSON(`${base}/${path}`, { ...opts, timeout: BRIDGE_TIMEOUT, retries: 0 });
+    } catch (err) {
+      if (err && err.message === "Отменено") throw err;
+      // мост не ответил — пробуем следующий уровень
+    }
   }
+  return direct();
 }
 
 /* Кеш конкретного матча: повторное открытие не тратит лимит OpenDota. */
