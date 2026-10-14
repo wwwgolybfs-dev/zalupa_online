@@ -1,0 +1,10 @@
+name = "kto-ruina-bridge"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Мост не хранит состояние, поэтому ни KV, ни R2, ни D1 не нужны:
+# кеш работает через Cache API самого воркера.
+
+# Необязательно: ключ OpenDota, чтобы снять троттлинг по IP.
+# Секрет задаётся командой (в файл его класть не нужно):
+#   npx wrangler secret put OPENDOTA_KEY

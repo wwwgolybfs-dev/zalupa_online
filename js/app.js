@@ -11,6 +11,10 @@
 
 /* ------------------------------- конфигурация ------------------------------ */
 const API = "https://api.opendota.com/api";
+// Мост к OpenDota через Cloudflare Workers (см. bridge/README.md).
+// Пустая строка — ходим в OpenDota напрямую. Если мост указан, но недоступен,
+// сайт сам откатывается на прямой запрос, поэтому без моста он тоже работает.
+const BRIDGE = "";
 const OPENDOTA_MATCH = "https://www.opendota.com/matches";
 const T = { match: 60000, request: 15000, poll: 20000 };
 const PARSE_POLL = { interval: 10000, attempts: 18 };  // ~3 минуты ожидания парсинга
@@ -78,6 +82,20 @@ async function fetchJSON(url, opts = {}) {
     }
   }
   throw lastErr || new Error("Не удалось получить данные.");
+}
+
+/* Запрос к OpenDota через мост (Cloudflare Workers) с откатом на прямой API.
+   path — без ведущего слэша, например "matches/123456". */
+async function apiFetch(path, opts = {}) {
+  const direct = () => fetchJSON(`${API}/${path}`, opts);
+  if (!BRIDGE) return direct();
+  try {
+    return await fetchJSON(`${BRIDGE}/${path}`, opts);
+  } catch (err) {
+    if (err && err.message === "Отменено") throw err;
+    // Мост недоступен (или упал) — работаем напрямую, чтобы сайт не ломался.
+    return direct();
+  }
 }
 
 /* Кеш конкретного матча: повторное открытие не тратит лимит OpenDota. */
@@ -328,18 +346,21 @@ function scorePlayer(p, c) {
 }
 
 /* ------------------------------ загрузка матча ---------------------------- */
-async function fetchMatch(id, signal) {
-  return fetchJSON(`${API}/matches/${id}`, { timeout: T.match, retries: 1, signal, fresh: true });
+/* force = true просит и мост, и браузер не отдавать кеш (кнопка «Обновить»). */
+async function fetchMatch(id, signal, force = false) {
+  const path = `matches/${id}${force ? "?force=1" : ""}`;
+  return apiFetch(path, { timeout: T.match, retries: 1, signal, fresh: true });
 }
 
 /* Запрос парсинга матча у OpenDota + ожидание результата. */
 async function requestParse(id, signal, onWait) {
-  await fetchJSON(`${API}/request/${id}`, { method: "POST", timeout: T.request, retries: 0, signal });
+  await apiFetch(`request/${id}`, { method: "POST", timeout: T.request, retries: 0, signal });
   for (let i = 1; i <= PARSE_POLL.attempts; i++) {
     await sleep(PARSE_POLL.interval, signal);
     onWait && onWait(i, PARSE_POLL.attempts);
     try {
-      const m = await fetchMatch(id, signal);
+      // force: иначе опрос будет вечно получать закешированный «неразобранный» матч
+      const m = await fetchMatch(id, signal, true);
       if (isParsed(m)) return m;
     } catch (e) {
       if (e.message === "Отменено") throw e;
@@ -790,7 +811,7 @@ async function runAnalysis(id, opts = {}) {
     if (cached) { m = cached.m; fromCache = true; }
     else {
       startTicker("Загружаем матч из OpenDota…");
-      m = await fetchMatch(id, signal);
+      m = await fetchMatch(id, signal, opts.force);
       if (isStale(run)) return;
       writeMatchCache(id, m);
     }
@@ -817,7 +838,7 @@ async function runAnalysis(id, opts = {}) {
     const res = analyze(m, avail);
     if (!res.culprit.rank_tier && res.culprit.account_id) {
       try {
-        const prof = await fetchJSON(`${API}/players/${res.culprit.account_id}`, { timeout: T.poll, retries: 0, signal });
+        const prof = await apiFetch(`players/${res.culprit.account_id}`, { timeout: T.poll, retries: 0, signal });
         if (prof && prof.rank_tier) res.culprit.rank_tier = prof.rank_tier;
       } catch (e) { if (e.message === "Отменено") throw e; }
       if (isStale(run)) return;
