@@ -28,9 +28,17 @@
       <input id="matchId" inputmode="numeric" autocomplete="off" placeholder="Введи Match ID" aria-label="Match ID" required>
       <button id="submit" type="submit">АНАЛИЗИРОВАТЬ</button>
     </form>
+    <div id="history" class="history hidden"></div>
     <div class="statusRow">
       <div id="status" class="status" role="status" aria-live="polite"></div>
       <button type="button" id="cancel" class="btnGhost hidden">Отмена</button>
+    </div>
+    <div id="skeleton" class="skeleton hidden" aria-hidden="true">
+      <div class="sk" style="width:34%"></div>
+      <div class="sk" style="width:58%"></div>
+      <div class="sk" style="width:42%"></div>
+      <div class="sk" style="width:76%"></div>
+      <div class="sk" style="width:24%"></div>
     </div>
     <div id="notice" class="notice hidden" aria-live="polite"></div>
     <a class="telegram" href="https://t.me/TOLIK_VDK" target="_blank" rel="noopener noreferrer"><span class="telegramIcon">➤</span> @TOLIK_VDK</a>
@@ -51,6 +59,7 @@
       </div>
       <div class="verdictActions">
         <button type="button" id="copyLink" class="btnGhost">Скопировать ссылку на разбор</button>
+        <button type="button" id="shareImage" class="btnGhost">Скачать картинку разбора</button>
         <a class="btnGhost" id="openMatch" href="#" target="_blank" rel="noopener noreferrer">Открыть матч на OpenDota</a>
       </div>
       <div class="nearRuiner" id="nearRuiner"></div>

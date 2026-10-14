@@ -95,6 +95,36 @@ function readCache(key) {
 function writeCache(key, data) {
   try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch (e) { /* квота/приватный режим — не критично */ }
 }
+
+/* Кеш конкретного матча: повторное открытие не тратит лимит OpenDota. */
+const MATCH_CACHE_TTL = 15 * 60 * 1000; // 15 минут
+function readMatchCache(id) {
+  try {
+    const raw = localStorage.getItem(`wr:match:${id}`);
+    if (!raw) return null;
+    const d = JSON.parse(raw);
+    if (!d || !d.m || Date.now() - d.ts > MATCH_CACHE_TTL) return null;
+    return d;
+  } catch (e) { return null; }
+}
+function writeMatchCache(id, m) {
+  try { localStorage.setItem(`wr:match:${id}`, JSON.stringify({ m, ts: Date.now() })); }
+  catch (e) { /* квота localStorage — просто не кешируем */ }
+}
+
+/* История последних разборов (для быстрого повторного открытия). */
+const HISTORY_KEY = "wr:history";
+function readHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch (e) { return []; }
+}
+function writeHistory(list) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(list.slice(0, 8))); } catch (e) { }
+}
+function pushHistory(entry) {
+  const list = readHistory().filter(x => String(x.id) !== String(entry.id));
+  list.unshift(entry);
+  writeHistory(list);
+}
 function slimHeroes(raw) {
   const out = {};
   for (const id of Object.keys(raw || {})) {
@@ -113,15 +143,23 @@ function slimItems(raw) {
 }
 async function loadConstants(signal) {
   const cached = readCache(LS_KEY);
-  if (cached && cached.heroes && cached.items) { setConstants(cached.heroes, cached.items); return "cache"; }
+  let heroes = (cached && cached.heroes) || {};
+  let items = (cached && cached.items) || {};
+  const needHeroes = Object.keys(heroes).length === 0;
+  const needItems = Object.keys(items).length === 0;
+  if (!needHeroes && !needItems) { setConstants(heroes, items); return "cache"; }
+
+  // Справочники грузятся и кешируются независимо: раньше при неудачной
+  // загрузке предметов они кешировались пустыми на неделю, и сборка не
+  // показывалась вообще. Теперь недостающая часть догружается отдельно.
   const [hr, ir] = await Promise.allSettled([
-    fetchJSON(`${API}/constants/heroes`, { timeout: T.constants, signal }),
-    fetchJSON(`${API}/constants/items`, { timeout: T.constants, signal })
+    needHeroes ? fetchJSON(`${API}/constants/heroes`, { timeout: T.constants, signal }) : null,
+    needItems ? fetchJSON(`${API}/constants/items`, { timeout: T.constants, signal }) : null
   ]);
-  const heroes = hr.status === "fulfilled" ? slimHeroes(hr.value) : {};
-  const items = ir.status === "fulfilled" ? slimItems(ir.value) : {};
+  if (needHeroes && hr.status === "fulfilled" && hr.value) heroes = slimHeroes(hr.value);
+  if (needItems && ir.status === "fulfilled" && ir.value) items = slimItems(ir.value);
   setConstants(heroes, items);
-  if (heroes && Object.keys(heroes).length) writeCache(LS_KEY, { heroes, items });
+  writeCache(LS_KEY, { heroes, items });
   return "network";
 }
 function setConstants(heroes, items) { HEROES = heroes || {}; ITEMS = items || {}; }
@@ -139,6 +177,23 @@ function heroImg(p) {
 function itemData(id) { return ITEMS[String(id)] || {}; }
 function itemImg(id) { const it = itemData(id); return it.img ? STEAM_CDN + it.img : ""; }
 function itemName(id) { return itemData(id).name || "Предмет"; }
+/* Элемент сборки: если путь картинки известен — картинка, иначе видимый
+   плейсхолдер с номером предмета (раньше был пустой src → ничего). */
+function itemFallback(img) {
+  const s = document.createElement("span");
+  s.className = "itemFallback";
+  s.title = (img && img.dataset && img.dataset.name) || "";
+  s.textContent = (img && img.dataset && img.dataset.fallback) || "?";
+  return s;
+}
+function itemHtml(id) {
+  const it = itemData(id);
+  if (it.img) {
+    const name = it.name || `#${id}`;
+    return `<img class="itemIcon" src="${STEAM_CDN + it.img}" alt="${esc(name)}" title="${esc(name)}" loading="lazy" data-name="${esc(name)}" data-fallback="${esc("#" + id)}" onerror="this.replaceWith(itemFallback(this))">`;
+  }
+  return `<span class="itemFallback" title="Предмет #${id}">#${id}</span>`;
+}
 function rankName(t) {
   const n = Number(t || 0), medal = Math.floor(n / 10), stars = n % 10;
   const name = ({ 1: "Herald", 2: "Guardian", 3: "Crusader", 4: "Archon", 5: "Legend", 6: "Ancient", 7: "Divine", 8: "Immortal" })[medal] || "Без ранга";
@@ -347,6 +402,31 @@ async function requestParse(id, signal, onWait) {
   return null;
 }
 
+/* Сравнение игрока с визави по той же позиции (Pos 1 vs Pos 1 и т.д.). */
+function vsOpponent(p, winByPos, winRoleMap) {
+  const pos = p.roleInfo && p.roleInfo.position;
+  const opp = pos ? winByPos[pos] : null;
+  if (!opp) return null;
+  return {
+    pos, opp,
+    oppRole: winRoleMap[opp.player_slot] || { role: `Pos ${pos}` },
+    gpm: p.gold_per_min || 0, ogpm: opp.gold_per_min || 0,
+    nw: p.net_worth || 0, onw: opp.net_worth || 0,
+    lh: p.last_hits || 0, olh: opp.last_hits || 0,
+    xpm: p.xp_per_min || 0, oxpm: opp.xp_per_min || 0,
+    dmg: p.hero_damage || 0, odmg: opp.hero_damage || 0
+  };
+}
+function vsRow(label, mine, theirs) {
+  const diff = mine - theirs;
+  const cls = diff < 0 ? "neg" : "pos";
+  return `<div class="vsRow"><span>${esc(label)}</span><b>${fmt(mine)}</b><i>→</i><b>${fmt(theirs)}</b><small class="${cls}">${diff >= 0 ? "+" : "−"}${fmt(Math.abs(diff))}</small></div>`;
+}
+function vsBlock(vs) {
+  if (!vs) return "";
+  return `<div class="vsBox"><div class="vsBoxTitle">Против визави · ${esc(vs.oppRole.role)}${vs.opp.personaname ? " · " + esc(vs.opp.personaname) : ""}</div>${vsRow("GPM", vs.gpm, vs.ogpm)}${vsRow("Net Worth", vs.nw, vs.onw)}${vsRow("Last Hits", vs.lh, vs.olh)}${vsRow("XPM", vs.xpm, vs.oxpm)}${vsRow("Hero DMG", vs.dmg, vs.odmg)}</div>`;
+}
+
 /* -------------------------------- анализ --------------------------------- */
 function analyze(m, avail) {
   const players = m.players.map((p, i) => ({ ...p, idx: i, team: teamOf(p) }));
@@ -357,18 +437,22 @@ function analyze(m, avail) {
   const teamDamage = team.reduce((a, p) => a + (p.hero_damage || 0), 0) || 1;
   const duration = m.duration || 1;
   const roleMap = inferRoles(team);
+  const winRoleMap = inferRoles(win);
+  const winByPos = {};
+  for (const w of win) { const pos = winRoleMap[w.player_slot].position; winByPos[pos] = w; }
   const enriched = team.map(p => ({ ...p, roleInfo: roleMap[p.player_slot] }));
   const ctx = { team: enriched, win, m, teamKills, teamDamage, duration };
   const scored = enriched.map(p => {
     const s = scorePlayer(p, ctx);
     s.confidence = availabilityScore(avail, s.roleConfidence);
+    s.vs = vsOpponent(p, winByPos, winRoleMap);
     return s;
   }).sort((a, b) => b.score - a.score);
   return { all: players, losing, team, win, scored, culprit: scored[0] || null, closeRuiner: scored[1] || null, avail };
 }
 
 /* --------------------------------- рендер -------------------------------- */
-const state = { matchId: null };
+const state = { matchId: null, lastMatch: null, lastResult: null };
 
 function impactLabel(score) {
   if (score >= 75) return "Очень высокое";
@@ -431,7 +515,7 @@ function verdictText(m, p, r, avail) {
   const caveat = avail.parsed
     ? ""
     : `<p class="verdictCaveat">Матч не разобран OpenDota, поэтому роли и часть сигналов определены приблизительно — вывод опирается на итоговую статистику.</p>`;
-  return `<div class="verdictCopy"><p><strong>${esc(p.personaname || "Этот игрок")}</strong> сыграл наиболее негативную роль в поражении. Модель сравнивает его показатели с ожидаемыми для <strong>его роли в игре</strong>, а затем проверяет, подтверждается ли провал несколькими независимыми сигналами.</p><p>${esc(lead)} Здесь важен контекст: ${esc(deathText)}</p>${caveat}<div class="vmetrics">${metricLine("Экономика", farmText, "ожидания роли учитываются отдельно")}${metricLine("Влияние в драках", fightText, "урон и участие в убийствах")}${metricLine("Объекты", objText, "давление на карту и строения")}${metricLine("Влияние на поражение", impactLabel(p.score), `надёжность вывода: ${reliabilityLabel(p.confidence)} (${p.confidence}%)`)}</div><div class="verdictReasons"><h3>Что сильнее всего повлияло</h3><ul>${reasons || '<li><b>Сигналы распределены равномерно</b><span>Нет одного показателя, который объясняет поражение целиком.</span></li>'}</ul></div></div>`;
+  return `<div class="verdictCopy"><p><strong>${esc(p.personaname || "Этот игрок")}</strong> сыграл наиболее негативную роль в поражении. Модель сравнивает его показатели с ожидаемыми для <strong>его роли в игре</strong>, а затем проверяет, подтверждается ли провал несколькими независимыми сигналами.</p><p>${esc(lead)} Здесь важен контекст: ${esc(deathText)}</p>${caveat}<div class="vmetrics">${metricLine("Экономика", farmText, "ожидания роли учитываются отдельно")}${metricLine("Влияние в драках", fightText, "урон и участие в убийствах")}${metricLine("Объекты", objText, "давление на карту и строения")}${metricLine("Влияние на поражение", impactLabel(p.score), `надёжность вывода: ${reliabilityLabel(p.confidence)} (${p.confidence}%)`)}</div>${vsBlock(p.vs)}<div class="verdictReasons"><h3>Что сильнее всего повлияло</h3><ul>${reasons || '<li><b>Сигналы распределены равномерно</b><span>Нет одного показателя, который объясняет поражение целиком.</span></li>'}</ul></div></div>`;
 }
 function nearRuinerHtml(p) {
   const rs = p.reasons.slice(0, 3).map(x => `<li><b>${esc(x[0])}</b><span>${esc(x[1])}</span></li>`).join("");
@@ -446,7 +530,8 @@ function playerCard(p, isCulprit) {
   return `<div class="playerCard ${isCulprit ? "culprit" : ""}">
   <div class="playerHead"><img class="heroIcon" src="${heroImg(p)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'"><div><div class="pname">${esc(p.personaname || "Unknown")}</div><div class="heroName">${esc(heroName(p))} · <b>${esc(p.role || "Unknown")}</b> <small>(${p.roleConfidence}%)</small></div></div><div class="pScore">${p.score}</div></div>
   <div class="statgrid"><span>K/D/A <b>${p.kills || 0}/${p.deaths || 0}/${p.assists || 0}</b></span><span>GPM <b>${fmt(p.gold_per_min)}</b></span><span>XPM <b>${fmt(p.xp_per_min)}</b></span><span>Last Hits <b>${fmt(p.last_hits)}</b></span><span>Hero DMG <b>${fmt(p.hero_damage)}</b></span><span>DMG Share <b>${p.dmgShare.toFixed(1)}%</b></span><span>KP <b>${p.kp.toFixed(0)}%</b></span><span>Tower DMG <b>${fmt(p.tower_damage)}</b></span><span>Net Worth <b>${fmt(p.net_worth)}</b></span><span>Healing <b>${fmt(p.hero_healing)}</b></span><span>Wards <b>${fmt((p.obs_placed || 0) + (p.sentry_placed || 0))}</b></span><span>Denies <b>${fmt(p.denies)}</b></span></div>
-  <div class="build"><span>Сборка</span>${items.length ? items.map(id => `<img title="${esc(itemName(id))}" src="${itemImg(id)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">`).join("") : "<em>нет данных</em>"}</div>
+  <div class="build"><span>Сборка</span>${items.length ? items.map(itemHtml).join("") : "<em>нет данных</em>"}${Object.keys(ITEMS).length === 0 && items.length ? '<small class="buildHint">справочник предметов не загрузился</small>' : ""}</div>
+  ${p.vs ? `<div class="vsLine">визави ${esc(p.vs.oppRole.role)}: GPM ${fmt(p.vs.gpm)} → ${fmt(p.vs.ogpm)} · NW ${fmt(p.vs.nw)} → ${fmt(p.vs.onw)}</div>` : ""}
  </div>`;
 }
 
@@ -728,16 +813,40 @@ function showNotice(html) {
   el.classList.toggle("hidden", !html);
 }
 
+/* Скелетон загрузки и история последних разборов. */
+function showSkeleton(on) {
+  const el = $("skeleton");
+  if (el) el.classList.toggle("hidden", !on);
+}
+function renderHistory() {
+  const el = $("history");
+  if (!el) return;
+  const list = readHistory();
+  if (!list.length) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  el.innerHTML = `<span class="historyLabel">Недавние:</span>` + list.map(h =>
+    `<button type="button" class="histChip" data-id="${esc(h.id)}" title="Разобрать матч ${esc(h.id)}">#${esc(h.id)}<em>${esc(h.hero || h.culprit || "")}</em></button>`
+  ).join("");
+  el.classList.remove("hidden");
+}
+
 async function runAnalysis(id, opts = {}) {
   const run = beginRun();
   const { signal } = run;
   setBusy(true);
   showNotice("");
   $("result").classList.add("hidden");
+  showSkeleton(true);
   try {
-    startTicker("Загружаем матч из OpenDota…");
-    const m = await fetchMatch(id, signal);
-    if (isStale(run)) return;
+    // Сначала пробуем локальный кеш матча: экономит лимит OpenDota.
+    let m = null, fromCache = false;
+    const cached = opts.force ? null : readMatchCache(id);
+    if (cached) { m = cached.m; fromCache = true; }
+    else {
+      startTicker("Загружаем матч из OpenDota…");
+      m = await fetchMatch(id, signal);
+      if (isStale(run)) return;
+      writeMatchCache(id, m);
+    }
     const avail = dataAvailability(m);
     state.matchId = String(id);
     writeMatchToUrl(id);
@@ -772,8 +881,17 @@ async function runAnalysis(id, opts = {}) {
     }
 
     render(m, res);
+    state.lastMatch = m;
+    state.lastResult = res;
+    pushHistory({ id: String(id), ts: Date.now(), hero: heroName(res.culprit), culprit: res.culprit.personaname, score: res.culprit.score });
+    renderHistory();
 
-    if (!avail.parsed) {
+    if (fromCache) {
+      const age = Math.max(0, Math.round((Date.now() - cached.ts) / 60000));
+      showNotice(noticeHtml("info", "Загружено из локального кеша",
+        `Разбор взят из кеша (сохранён ${age} мин назад), чтобы не расходовать лимит OpenDota. Нажми «Обновить», чтобы получить свежие данные.`,
+        `<button type="button" class="btnPrimary" id="refreshBtn">Обновить</button>`));
+    } else if (!avail.parsed) {
       const parseAction = opts.parseOffered === false ? "" : `<button type="button" class="btnPrimary" id="parseBtn">Запросить разбор у OpenDota</button>`;
       showNotice(noticeHtml("warn", "Матч не разобран OpenDota",
         `Разбор построен только по итоговой статистике: ${missingDataList(avail).join("; ")}. Роли и часть сигналов приблизительны, поэтому надёжность вывода снижена.`,
@@ -783,7 +901,7 @@ async function runAnalysis(id, opts = {}) {
       if (miss.length) showNotice(noticeHtml("info", "Данных достаточно, но не всё", `Отсутствует: ${miss.join("; ")}.`));
     }
     stopTicker();
-    setStatus(`Матч ${id} разобран${avail.parsed ? "" : " частично"} · ${new Date().toLocaleTimeString("ru-RU")}`);
+    setStatus(`Матч ${id} разобран${avail.parsed ? "" : " частично"}${fromCache ? " · из кеша" : ""} · ${new Date().toLocaleTimeString("ru-RU")}`);
   } catch (err) {
     if (isStale(run)) return;
     stopTicker();
@@ -795,7 +913,7 @@ async function runAnalysis(id, opts = {}) {
         `<a class="btnGhost" href="${OPENDOTA_MATCH}/${encodeURIComponent(id)}" target="_blank" rel="noopener">Проверить матч на OpenDota</a>`));
     }
   } finally {
-    if (!isStale(run)) { stopTicker(); setBusy(false); }
+    if (!isStale(run)) { stopTicker(); setBusy(false); showSkeleton(false); }
   }
 }
 
@@ -822,7 +940,8 @@ async function runParseRequest(id) {
     stopTicker(); setBusy(false);
     if (parsed) {
       setStatus("Разбор готов, собираем анализ…");
-      await runAnalysis(id);
+      writeMatchCache(id, parsed);
+      await runAnalysis(id, { force: true });
     } else {
       showNotice(noticeHtml("warn", "Разбор пока не готов",
         "OpenDota не успел разобрать матч за отведённое время. Обычно это занимает дольше для старых игр — попробуй ещё раз через пару минут.",
@@ -858,6 +977,111 @@ async function copyShareLink() {
   }
 }
 
+/* ---------------------- картинка-вердикт для Telegram --------------------- */
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+async function buildShareCanvas(m, c) {
+  const W = 1200, H = 630;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  const g = ctx.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, "#0c0e15"); g.addColorStop(0.6, "#101018"); g.addColorStop(1, "#170f0d");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#ff4545"; ctx.fillRect(0, 0, W, 6);
+
+  // герой (если CDN отдаёт с CORS-заголовком)
+  let drew = false;
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = heroImg(c);
+  await new Promise(res => { img.onload = res; img.onerror = res; setTimeout(res, 2500); });
+  if (img.complete && img.naturalWidth > 0) {
+    ctx.save(); rr(ctx, 40, 60, 132, 132, 14); ctx.clip();
+    try { ctx.drawImage(img, 40, 60, 132, 132); drew = true; } catch (e) { }
+    ctx.restore();
+  }
+  if (!drew) {
+    ctx.fillStyle = "#1d2230"; rr(ctx, 40, 60, 132, 132, 14); ctx.fill();
+    ctx.fillStyle = "#ff4545"; ctx.font = "700 64px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText((heroName(c)[0] || "?").toUpperCase(), 106, 126);
+  }
+
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+  ctx.font = "900 64px Arial"; ctx.fillStyle = "#ffffff";
+  ctx.fillText("КТО", 200, 120);
+  const tw = ctx.measureText("КТО ").width;
+  ctx.fillStyle = "#ff4545"; ctx.fillText("РУИНА?", 200 + tw, 120);
+
+  ctx.font = "600 24px Arial"; ctx.fillStyle = "#8a8f9a";
+  ctx.fillText(`Match ID ${m.match_id || state.matchId || "—"} · разбор поражения`, 200, 156);
+
+  ctx.font = "900 44px Arial"; ctx.fillStyle = "#ffffff";
+  ctx.fillText(c.personaname || "Игрок", 200, 220);
+  ctx.font = "600 28px Arial"; ctx.fillStyle = "#c9ccd6";
+  ctx.fillText(`${heroName(c)} · ${c.role || ""}`, 200, 258);
+
+  ctx.font = "700 26px Arial"; ctx.fillStyle = "#8a8f9a";
+  ctx.fillText("Влияние на поражение", 200, 312);
+  const ic = impactClass(c.score);
+  ctx.font = "900 72px Arial";
+  ctx.fillStyle = (ic === "very-high" || ic === "high") ? "#ff5b5b" : ic === "minimal" ? "#78d39a" : "#ffb45b";
+  ctx.fillText(impactLabel(c.score), 200, 392);
+
+  const stats = [
+    ["K/D/A", `${c.kills || 0}/${c.deaths || 0}/${c.assists || 0}`],
+    ["GPM", fmt(c.gold_per_min)],
+    ["Hero DMG", fmt(c.hero_damage)],
+    ["Net Worth", fmt(c.net_worth)]
+  ];
+  let sx = 200;
+  for (const [k, v] of stats) {
+    ctx.font = "600 20px Arial"; ctx.fillStyle = "#8a8f9a"; ctx.fillText(k, sx, 440);
+    ctx.font = "800 30px Arial"; ctx.fillStyle = "#ffffff"; ctx.fillText(String(v), sx, 476);
+    sx += 250;
+  }
+
+  const reason = c.reasons && c.reasons[0];
+  if (reason) {
+    ctx.font = "600 22px Arial"; ctx.fillStyle = "#8a8f9a";
+    ctx.fillText("Главная причина", 200, 536);
+    ctx.font = "700 26px Arial"; ctx.fillStyle = "#ffd7d7";
+    ctx.fillText(reason[0], 200, 572);
+  }
+
+  ctx.font = "500 18px Arial"; ctx.fillStyle = "#5d626e";
+  ctx.fillText("Данные OpenDota · эвристический разбор, а не приговор", 40, H - 28);
+
+  return canvas;
+}
+async function downloadShareImage() {
+  const c = state.lastResult && state.lastResult.culprit;
+  const m = state.lastMatch;
+  if (!c || !m) { setStatus("Сначала разбери матч."); return; }
+  setStatus("Готовим картинку…");
+  try {
+    const canvas = await buildShareCanvas(m, c);
+    const url = canvas.toDataURL("image/png");
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `kto-ruina-${m.match_id || state.matchId}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setStatus("Картинка разбора скачана.");
+  } catch (e) {
+    setStatus("Не удалось собрать картинку: " + (e && e.message ? e.message : e));
+  }
+}
+
 /* --------------------------------- запуск -------------------------------- */
 function init() {
   const form = $("form");
@@ -868,18 +1092,29 @@ function init() {
     runAnalysis(id);
   });
   const cancel = $("cancel");
-  cancel && cancel.addEventListener("click", () => { cancelRun(); stopTicker(); setBusy(false); setStatus("Загрузка отменена."); });
+  cancel && cancel.addEventListener("click", () => { cancelRun(); stopTicker(); setBusy(false); showSkeleton(false); setStatus("Загрузка отменена."); });
   const copy = $("copyLink");
   copy && copy.addEventListener("click", copyShareLink);
+  const shareImg = $("shareImage");
+  shareImg && shareImg.addEventListener("click", downloadShareImage);
 
   const notice = $("notice");
   notice && notice.addEventListener("click", e => {
     const t = e.target;
     if (t.closest("#parseBtn") || t.closest("#parseRetry")) runParseRequest(state.matchId);
+    else if (t.closest("#refreshBtn")) runAnalysis(state.matchId, { force: true });
   });
+
+  const history = $("history");
+  history && history.addEventListener("click", e => {
+    const chip = e.target.closest(".histChip");
+    if (chip && chip.dataset.id) { $("matchId").value = chip.dataset.id; runAnalysis(chip.dataset.id); }
+  });
+  renderHistory();
 
   const fromUrl = readMatchFromUrl();
   if (fromUrl) { $("matchId").value = fromUrl; runAnalysis(fromUrl); }
+  else if ($("matchId")) $("matchId").focus();
 
   // Ссылка на другой разбор в той же вкладке меняет только хеш, поэтому
   // документ не перезагружается — разбор нужно запустить вручную.
@@ -896,6 +1131,8 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     isParsed, dataAvailability, availabilityScore, reliabilityLabel, missingDataList,
     inferRoles, inferRole, roleWeights, scorePlayer, analyze, phasesFor, goldGapAt,
-    teamKillsIn, teamObjectivesIn, matchStory, buildEvents, overview, setConstants
+    teamKillsIn, teamObjectivesIn, matchStory, buildEvents, overview, setConstants,
+    vsOpponent, vsBlock, itemHtml, itemFallback,
+    readMatchCache, writeMatchCache, readHistory, writeHistory, pushHistory
   };
 }

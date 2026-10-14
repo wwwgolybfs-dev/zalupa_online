@@ -338,6 +338,35 @@ h1 span { color: #ff4545 }
   .verdict { padding: 20px }
 }
 
+/* ------------------------- сравнение с визави --------------------------- */
+.vsBox { margin: 14px 0 0; background: #111319; border: 1px solid #242730; border-radius: 11px; padding: 12px 14px }
+.vsBoxTitle { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #8a8e98; font-weight: 800; margin-bottom: 10px }
+.vsRow { display: grid; grid-template-columns: 90px 1fr auto 1fr auto; gap: 8px; align-items: center; padding: 5px 0; border-bottom: 1px solid #1a1d24 }
+.vsRow:last-child { border-bottom: 0 }
+.vsRow span { color: #777b86; font-size: 11px }
+.vsRow b { font-size: 13px; color: #eee; text-align: right }
+.vsRow i { color: #4a4f59; font-style: normal; text-align: center }
+.vsRow small { font-size: 11px; font-weight: 800 }
+.vsRow small.neg { color: #ff8f8f }
+.vsRow small.pos { color: #78d39a }
+
+/* строка визави в карточке игрока */
+.vsLine { margin-top: 10px; font-size: 11px; color: #8a8f99 }
+
+/* --------------------------- предметы (сборка) -------------------------- */
+.itemFallback { width: 34px; height: 34px; border-radius: 7px; background: #20232a; border: 1px dashed #3a3f4c; color: #9aa0ac; font-size: 10px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center }
+.buildHint { color: #6f747f; font-size: 10px; margin-left: 4px }
+
+/* ------------------------- история и скелетон --------------------------- */
+.history { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 16px }
+.historyLabel { color: #6f747f; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px }
+.histChip { border: 1px solid rgba(120, 140, 170, .28); background: rgba(10, 14, 22, .6); color: #cbd3e0; border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit }
+.histChip em { font-style: normal; color: #6f747f; font-size: 11px; margin-left: 5px }
+.histChip:hover { border-color: rgba(120, 140, 170, .6); color: #fff }
+.skeleton { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; max-width: 760px }
+.sk { height: 16px; border-radius: 8px; background: linear-gradient(90deg, #14171f 25%, #1d222d 50%, #14171f 75%); background-size: 200% 100%; animation: skShimmer 1.4s linear infinite }
+@keyframes skShimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+
 /* -------------------------------- утилиты ------------------------------- */
 /* Правило обязано стоять последним: иначе display у компонентов
    (например, .btnGhost у кнопки «Отмена») перебивает скрытие. */
