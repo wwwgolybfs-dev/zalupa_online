@@ -367,6 +367,26 @@ h1 span { color: #ff4545 }
 .sk { height: 16px; border-radius: 8px; background: linear-gradient(90deg, #14171f 25%, #1d222d 50%, #14171f 75%); background-size: 200% 100%; animation: skShimmer 1.4s linear infinite }
 @keyframes skShimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
 
+/* ------------------------- карта башен в конце игры --------------------- */
+.towerMap { display: block; width: 100%; max-width: 640px; height: auto; margin: 0 auto; border-radius: 12px; background: rgba(6, 9, 14, .5); border: 1px solid #1c2129 }
+.mapLegend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 12px; justify-content: center; color: #8a8f9a; font-size: 12px }
+.mapLegend .lg { display: inline-flex; align-items: center; gap: 6px }
+.mapLegend .lg i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; flex: none }
+
+/* «как избежать» в причинах поражения */
+.reason em { display: block; margin-top: 8px; padding-top: 8px; border-top: 1px solid #20242b; color: #a5c6a8; font-style: normal; font-size: 12.5px; line-height: 1.45 }
+.verdictReasons li em, .nearReasons li em { display: block; margin-top: 6px; color: #a5c6a8; font-style: normal; font-size: 11.5px; line-height: 1.4 }
+
+/* ------------------------------ адаптив: телефон ------------------------- */
+@media (max-width: 750px) {
+  .towerMap { max-width: 100% }
+  .btnGhost, .btnPrimary, .histChip { min-height: 44px; box-sizing: border-box }
+  .histChip { padding: 10px 14px }
+  .vsRow { grid-template-columns: 68px 1fr 14px 1fr auto; gap: 5px }
+  .mapLegend { gap: 10px; font-size: 11px }
+  .verdict h2 { font-size: 27px }
+}
+
 /* -------------------------------- утилиты ------------------------------- */
 /* Правило обязано стоять последним: иначе display у компонентов
    (например, .btnGhost у кнопки «Отмена») перебивает скрытие. */

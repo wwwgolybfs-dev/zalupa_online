@@ -337,14 +337,47 @@ function scorePlayer(p, c) {
   const score = clamp(raw + resourceWaste, 0, 100);
 
   const reasons = [];
-  if (farmGap > 5) reasons.push([`Фарм ниже ожидания для ${role}`, `GPM ${fmt(farm)}; ориентир модели ≈ ${expectedGpm}.`]);
-  if (damageGap > 5) reasons.push([`Низкий вклад в драках для ${role}`, `${fmt(p.hero_damage)} hero damage — ${dmgShare.toFixed(1)}% командного урона.`]);
-  if (kpGap > 5) reasons.push([`Низкое участие в убийствах`, `Kill Participation ${kp.toFixed(0)}%; ориентир модели ≈ ${expectedKP}%.`]);
-  if (errorPenalty > 7) reasons.push([`Цена смертей слишком высока`, `${deaths} ${plural(deaths, "смерть", "смерти", "смертей")} с повышенным весом поздней игры.`]);
-  if (resourceWaste) reasons.push([`Ресурсы не конвертированы в результат`, `Высокий GPM сочетался с низким уроном и слабым давлением на строения.`]);
-  if (objectivePenalty > 5) reasons.push([`Слабое давление на объекты`, `${fmt(p.tower_damage)} урона по строениям для ${role}.`]);
-  if (utilityCredit > 4) reasons.push([`Положительный вклад поддержки`, `Вклад в вижен и лечение снижает итоговый blame.`]);
-  if (!reasons.length) reasons.push([`Нет одного доминирующего провала`, `Оценка собрана из нескольких сигналов с учётом предполагаемой роли.`]);
+  // Каждая причина — [заголовок, контекст, как избежать].
+  if (farmGap > 5) reasons.push([
+    `Фарм ниже ожидания для ${role}`,
+    `GPM ${fmt(farm)} при ориентире ≈ ${expectedGpm} — по роли ты недобрал золота, и это потянуло вниз остальные показатели.`,
+    `Не пропускай крипов на линии и забирай стаки; если после 10-й минуты свою линию выжимают — сместись в лес или на свободную линию, чтобы не терять темп по золоту.`
+  ]);
+  if (damageGap > 5) reasons.push([
+    `Низкий вклад в драках для ${role}`,
+    `${fmt(p.hero_damage)} hero damage — ${dmgShare.toFixed(1)}% командного урона для этой роли мало.`,
+    `Держись в зоне драки и бей приоритетную цель: кору — по вражеским коркам, а не по танку без смысла; поддерживай фокус команды, а не «свою» цель.`
+  ]);
+  if (kpGap > 5) reasons.push([
+    `Низкое участие в убийствах`,
+    `Kill Participation ${kp.toFixed(0)}% при ориентире ≈ ${expectedKP}% — ты мало участвовал в результативных действиях команды.`,
+    `Следи за передвижениями союзников и подключайся к гангам и дракам по сигналу: одна вовремя оказанная помощь ценнее нескольких минут фарма в стороне.`
+  ]);
+  if (errorPenalty > 7) reasons.push([
+    `Цена смертей слишком высока`,
+    `${deaths} ${plural(deaths, "смерть", "смерти", "смертей")} — в поздней игре смерть стоит дороже всего: теряется золото, темп и контроль карты.`,
+    `Не ходи в одиночку в тёмную зону без вижена, следи за появлением врагов на карте и трать байбэк только тогда, когда он реально решает исход драки.`
+  ]);
+  if (resourceWaste) reasons.push([
+    `Ресурсы не конвертированы в результат`,
+    `Высокий GPM (${fmt(farm)}) не превратился ни в урон, ни в давление на строения — золото по сути потрачено впустую.`,
+    `Набрав преимущество, сразу ищи точку приложения: драка за объект, пуш башни или Рошан — а не бесконечное накопление золота без влияния на карту.`
+  ]);
+  if (objectivePenalty > 5) reasons.push([
+    `Слабое давление на объекты`,
+    `${fmt(p.tower_damage)} урона по строениям для ${role} — без сноса башен преимущество не превращается в победу.`,
+    `После выигранной драки иди добивать ближайшую башню или Рошана, а не разбегайся фармить: цель игры — строения, а не только KDA.`
+  ]);
+  if (utilityCredit > 4) reasons.push([
+    `Положительный вклад поддержки`,
+    `${fmt((p.obs_placed || 0) + (p.sentry_placed || 0))} вардов и ${fmt(p.hero_healing)} лечения снизили твой итоговый blame.`,
+    `Продолжай держать вижен на ключевых точках вокруг следующего объекта — это твой основной инструмент влияния на игру.`
+  ]);
+  if (!reasons.length) reasons.push([
+    `Нет одного доминирующего провала`,
+    `Оценка собрана из нескольких сигналов с учётом роли — ни один показатель не просел катастрофически.`,
+    `Сфокусируйся на связке фарм → драка → объект: поражение чаще складывается из мелочей, чем из одного грубого провала.`
+  ]);
 
   return {
     ...p, score: Math.round(score), reasons, kp, dmgShare, role,
@@ -446,6 +479,13 @@ function impactClass(score) {
 function metricLine(label, value, detail) {
   return `<div class="vmetric"><span>${esc(label)}</span><b>${esc(value)}</b><small>${esc(detail)}</small></div>`;
 }
+/* Причина поражения: заголовок + контекст + «как избежать». */
+function reasonHtml(r) {
+  return `<div class="reason"><strong>+ ${esc(r[0])}</strong><span>${esc(r[1])}</span>${r[2] ? `<em>Как избежать: ${esc(r[2])}</em>` : ""}</div>`;
+}
+function reasonLi(r) {
+  return `<li><b>${esc(r[0])}</b><span>${esc(r[1])}</span>${r[2] ? `<em>Как избежать: ${esc(r[2])}</em>` : ""}</li>`;
+}
 function noticeHtml(kind, title, text, actionsHtml = "") {
   const icon = kind === "bad" ? "⛔" : kind === "warn" ? "⚠️" : "ℹ️";
   return `<div class="noticeBox ${kind}"><div class="noticeHead">${icon} <b>${esc(title)}</b></div><p>${esc(text)}</p>${actionsHtml ? `<div class="noticeActions">${actionsHtml}</div>` : ""}</div>`;
@@ -486,14 +526,14 @@ function verdictText(m, p, r, avail) {
   const farmText = `${fmt(p.gold_per_min)} GPM, ${fmt(p.net_worth)} net worth и ${fmt(p.last_hits)} last hits`;
   const fightText = `${p.kp.toFixed(0)}% KP и ${p.dmgShare.toFixed(1)}% командного hero damage`;
   const objText = `${fmt(p.tower_damage)} урона по строениям`;
-  const reasons = p.reasons.slice(0, 3).map(x => `<li><b>${esc(x[0])}</b><span>${esc(x[1])}</span></li>`).join("");
+  const reasons = p.reasons.slice(0, 3).map(reasonLi).join("");
   const caveat = avail.parsed
     ? ""
     : `<p class="verdictCaveat">Матч не разобран OpenDota, поэтому роли и часть сигналов определены приблизительно — вывод опирается на итоговую статистику.</p>`;
   return `<div class="verdictCopy"><p><strong>${esc(p.personaname || "Этот игрок")}</strong> сыграл наиболее негативную роль в поражении. Модель сравнивает его показатели с ожидаемыми для <strong>его роли в игре</strong>, а затем проверяет, подтверждается ли провал несколькими независимыми сигналами.</p><p>${esc(lead)} Здесь важен контекст: ${esc(deathText)}</p>${caveat}<div class="vmetrics">${metricLine("Экономика", farmText, "ожидания роли учитываются отдельно")}${metricLine("Влияние в драках", fightText, "урон и участие в убийствах")}${metricLine("Объекты", objText, "давление на карту и строения")}${metricLine("Влияние на поражение", impactLabel(p.score), `надёжность вывода: ${reliabilityLabel(p.confidence)} (${p.confidence}%)`)}</div>${vsBlock(p.vs)}<div class="verdictReasons"><h3>Что сильнее всего повлияло</h3><ul>${reasons || '<li><b>Сигналы распределены равномерно</b><span>Нет одного показателя, который объясняет поражение целиком.</span></li>'}</ul></div></div>`;
 }
 function nearRuinerHtml(p) {
-  const rs = p.reasons.slice(0, 3).map(x => `<li><b>${esc(x[0])}</b><span>${esc(x[1])}</span></li>`).join("");
+  const rs = p.reasons.slice(0, 3).map(reasonLi).join("");
   return `<div class="nearHead"><img src="${heroImg(p)}" alt="" onerror="this.style.visibility='hidden'"><div><div class="nearLabel">БЛИЗКИЙ К РУИНУ ИГРОК</div><h3>${esc(p.personaname || "Unknown")}</h3><p>${esc(heroName(p))} · ${esc(p.role)}</p></div><strong>${p.score}</strong></div><div class="nearStats"><span>K/D/A <b>${p.kills || 0}/${p.deaths || 0}/${p.assists || 0}</b></span><span>GPM <b>${fmt(p.gold_per_min)}</b></span><span>KP <b>${p.kp.toFixed(0)}%</b></span><span>Hero DMG <b>${fmt(p.hero_damage)}</b></span></div><ul class="nearReasons">${rs}</ul>`;
 }
 function winnerPlayerCard(p) {
@@ -653,7 +693,7 @@ function lessonAction(p) {
 }
 function mainLesson(p) {
   const r = p.reasons[0];
-  if (r) return { title: r[0], text: r[1], action: lessonAction(p) };
+  if (r) return { title: r[0], text: r[1], action: r[2] || lessonAction(p) };
   return { title: "Не один показатель решал исход", text: "Вклад игрока сформирован несколькими сигналами, поэтому исправлять нужно не одну цифру.", action: "Смотри на связку фарм → драка → объект, а не только на KDA." };
 }
 function notTheirFault(p) {
@@ -719,6 +759,102 @@ function matchStory(m, all, culprit, avail) {
   return `${note}<div class="storyGrid"><div class="phases">${rows}</div><div class="turning"><div class="storyLabel">⚡ МОМЕНТ ПЕРЕЛОМА</div><h3>${esc(turning.title)}</h3><div class="turnTime">${esc(turning.t)}</div><p>${esc(turning.text)}</p><b>${esc(turning.why)}</b></div><div class="lesson"><div class="storyLabel">🎯 ГЛАВНЫЙ УРОК</div><h3>${esc(lesson.title)}</h3><p>${esc(lesson.text)}</p><div class="nextGame"><span>В следующей игре</span><b>${esc(lesson.action)}</b></div></div><div class="innocence"><div class="storyLabel goodLabel">🟢 ЧТО НЕ БЫЛО ТВОЕЙ ОШИБКОЙ</div><h3>${esc(innocence.title)}</h3><p>${esc(innocence.text)}</p></div></div>`;
 }
 
+/* --------------------- карта башен в конце игры --------------------------- */
+const MAP_SIZE = 720;
+
+// Позиции зданий Radiant; Dire — зеркально относительно диагонали.
+const RADIANT_POS = {
+  ancient: [150, 620],
+  tower4: [[116, 582], [184, 582]],
+  tower: {
+    bot: { 1: [250, 662], 2: [378, 682], 3: [508, 692] },
+    mid: { 1: [252, 312], 2: [326, 386], 3: [402, 462] },
+    top: { 1: [62, 312], 2: [86, 222], 3: [132, 148] },
+  },
+  barracks: {
+    bot: { melee: [168, 680], range: [198, 692] },
+    mid: { melee: [198, 556], range: [228, 566] },
+    top: { melee: [104, 500], range: [134, 506] },
+  },
+};
+function mirrorPos(p) { return [MAP_SIZE - p[1], MAP_SIZE - p[0]]; }
+
+/* building_kill → { radiant: {suffix: [времена]}, dire: {...} } */
+function buildingKills(m) {
+  const map = { radiant: {}, dire: {} };
+  for (const o of (m.objectives || [])) {
+    if (o.type !== "building_kill" || !o.key) continue;
+    const team = /badguys/.test(o.key) ? "dire" : /goodguys/.test(o.key) ? "radiant" : null;
+    if (!team) continue;
+    const suffix = o.key.replace(/^npc_dota_(goodguys|badguys)_/, "");
+    (map[team][suffix] = map[team][suffix] || []).push(Number(o.time) || 0);
+  }
+  return map;
+}
+
+function towerMapHtml(m) {
+  const hasAny = (m.objectives || []).some(o => o.type === "building_kill") || typeof m.tower_status_radiant === "number";
+  if (!hasAny) {
+    return `<div class="empty">Данных о строениях в этом матче нет (матч не разобран OpenDota).</div>`;
+  }
+
+  const kills = buildingKills(m);
+  const parts = [];
+
+  // река по диагонали
+  parts.push(`<line x1="0" y1="${MAP_SIZE}" x2="${MAP_SIZE}" y2="0" stroke="#12303f" stroke-width="40" stroke-linecap="round" opacity="0.45"/>`);
+  parts.push(`<text x="132" y="712" fill="#7cc48c" font-size="13" font-weight="700" text-anchor="middle" opacity="0.85">RADIANT</text>`);
+  parts.push(`<text x="${MAP_SIZE - 132}" y="26" fill="#e08b74" font-size="13" font-weight="700" text-anchor="middle" opacity="0.85">DIRE</text>`);
+
+  const towerMark = (x, y, team, destroyed, tSec, label) => {
+    const fill = destroyed ? "#33383f" : team === "radiant" ? "#57b26a" : "#d05941";
+    const stroke = destroyed ? "#565b63" : team === "radiant" ? "#8fe0a0" : "#ff9a85";
+    const tip = destroyed ? `${label} — снесена на ${time(tSec)}` : `${label} — цела`;
+    return `<circle cx="${x}" cy="${y}" r="14" fill="${fill}" stroke="${stroke}" stroke-width="2"><title>${esc(tip)}</title></circle>${destroyed ? `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11" fill="#f2b3a6">✕</text>` : ""}`;
+  };
+  const barrackMark = (x, y, team, destroyed, tSec, label) => {
+    const fill = destroyed ? "#33383f" : team === "radiant" ? "#3f8f50" : "#a04330";
+    const stroke = destroyed ? "#565b63" : team === "radiant" ? "#8fe0a0" : "#ff9a85";
+    const tip = destroyed ? `${label} — снесён на ${time(tSec)}` : `${label} — цел`;
+    return `<rect x="${x - 9}" y="${y - 9}" width="18" height="18" rx="3" fill="${fill}" stroke="${stroke}" stroke-width="1.5"><title>${esc(tip)}</title></rect>${destroyed ? `<text x="${x}" y="${y + 4}" text-anchor="middle" font-size="10" fill="#f2b3a6">✕</text>` : ""}`;
+  };
+
+  const lanes = ["bot", "mid", "top"];
+  for (const team of ["radiant", "dire"]) {
+    const px = p => (team === "radiant" ? p : mirrorPos(p));
+    const dt = suffix => (((kills[team] || {})[suffix] || [])[0] || null);
+
+    // древний (fort = основное здание)
+    const anc = px(RADIANT_POS.ancient);
+    const ancDead = !!(dt("fort") || dt("ancient"));
+    parts.push(`<rect x="${anc[0] - 16}" y="${anc[1] - 16}" width="32" height="32" rx="6" transform="rotate(45 ${anc[0]} ${anc[1]})" fill="${ancDead ? "#33383f" : "#b98a2e"}" stroke="${ancDead ? "#565b63" : "#c9a14a"}" stroke-width="2"><title>${esc((team === "radiant" ? "Radiant" : "Dire") + " древний — " + (ancDead ? "разрушен" : "цел"))}</title></rect>`);
+
+    // T4 (две башни у древнего)
+    RADIANT_POS.tower4.forEach((tp, i) => {
+      const p = px(tp);
+      const t = ((kills[team] || {}).tower4 || [])[i] || null;
+      parts.push(towerMark(p[0], p[1], team, !!t, t, `${team} T4 #${i + 1}`));
+    });
+
+    // башни T1–T3
+    for (const lane of lanes) for (const tier of [1, 2, 3]) {
+      const p = px(RADIANT_POS.tower[lane][tier]);
+      const t = dt(`tower${tier}_${lane}`);
+      parts.push(towerMark(p[0], p[1], team, !!t, t, `${team} ${lane} T${tier}`));
+    }
+
+    // бараки
+    for (const lane of lanes) for (const type of ["melee", "range"]) {
+      const p = px(RADIANT_POS.barracks[lane][type]);
+      const t = dt(`${type}_rax_${lane}`);
+      parts.push(barrackMark(p[0], p[1], team, !!t, t, `${team} ${lane} ${type === "melee" ? "melee" : "ranged"} барак`));
+    }
+  }
+
+  const legend = `<div class="mapLegend"><span class="lg"><i style="background:#57b26a"></i>Radiant</span><span class="lg"><i style="background:#d05941"></i>Dire</span><span class="lg"><i style="background:#33383f"></i>Сломано (✕)</span><span class="lg">Наведи на значок — время сноса</span></div>`;
+  return `<svg class="towerMap" viewBox="0 0 ${MAP_SIZE} ${MAP_SIZE}" role="img" aria-label="Карта башен в конце игры">${parts.join("")}</svg>${legend}`;
+}
+
 /* ------------------------------- отрисовка -------------------------------- */
 function render(m, res) {
   const { all, scored, culprit, closeRuiner, avail } = res;
@@ -734,6 +870,7 @@ function render(m, res) {
   $("summary").innerHTML = verdictText(m, culprit, closeRuiner, avail);
   $("nearRuiner").innerHTML = closeRuiner ? nearRuinerHtml(closeRuiner) : '<div class="nearEmpty">Второй игрок не набрал достаточно сигналов для отдельного сравнения.</div>';
   $("matchOverview").innerHTML = overview(m, all, avail);
+  $("towerMap").innerHTML = towerMapHtml(m);
 
   const winningTeam = m.radiant_win ? "Radiant" : "Dire";
   const winPlayers = all.filter(p => p.team === winningTeam);
@@ -749,7 +886,7 @@ function render(m, res) {
     : `<div class="empty">Для этого матча данных о событиях недостаточно.</div>`;
 
   $("matchStory").innerHTML = matchStory(m, all, culprit, avail);
-  $("reasons").innerHTML = culprit.reasons.map(r => `<div class="reason"><strong>+ ${esc(r[0])}</strong><span>${esc(r[1])}</span></div>`).join("");
+  $("reasons").innerHTML = culprit.reasons.map(reasonHtml).join("");
 
   const openLink = $("openMatch");
   const matchId = m.match_id || state.matchId;
@@ -958,7 +1095,7 @@ function rr(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
 }
-async function buildShareCanvas(m, c) {
+async function buildShareCanvas(m, c, withImage = true) {
   const W = 1200, H = 630;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
@@ -969,17 +1106,24 @@ async function buildShareCanvas(m, c) {
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   ctx.fillStyle = "#ff4545"; ctx.fillRect(0, 0, W, 6);
 
-  // герой (если CDN отдаёт с CORS-заголовком)
-  let drew = false;
-  const img = new Image();
-  img.src = heroImg(c); // локальный ассет — тот же origin, канвас не «портится»
-  await new Promise(res => { img.onload = res; img.onerror = res; setTimeout(res, 2500); });
-  if (img.complete && img.naturalWidth > 0) {
-    ctx.save(); rr(ctx, 40, 60, 132, 132, 14); ctx.clip();
-    try { ctx.drawImage(img, 40, 60, 132, 132); drew = true; } catch (e) { }
-    ctx.restore();
-  }
-  if (!drew) {
+  // Портрет героя. На file:// отрисованная локальная картинка «пачкает» канвас,
+  // поэтому при ошибке экспорта картинку не рисуем (см. downloadShareImage).
+  if (withImage) {
+    let drew = false;
+    const img = new Image();
+    img.src = heroImg(c);
+    await new Promise(res => { img.onload = res; img.onerror = res; setTimeout(res, 2500); });
+    if (img.complete && img.naturalWidth > 0) {
+      ctx.save(); rr(ctx, 40, 60, 132, 132, 14); ctx.clip();
+      try { ctx.drawImage(img, 40, 60, 132, 132); drew = true; } catch (e) { }
+      ctx.restore();
+    }
+    if (!drew) {
+      ctx.fillStyle = "#1d2230"; rr(ctx, 40, 60, 132, 132, 14); ctx.fill();
+      ctx.fillStyle = "#ff4545"; ctx.font = "700 64px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText((heroName(c)[0] || "?").toUpperCase(), 106, 126);
+    }
+  } else {
     ctx.fillStyle = "#1d2230"; rr(ctx, 40, 60, 132, 132, 14); ctx.fill();
     ctx.fillStyle = "#ff4545"; ctx.font = "700 64px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
     ctx.fillText((heroName(c)[0] || "?").toUpperCase(), 106, 126);
@@ -1038,8 +1182,14 @@ async function downloadShareImage() {
   if (!c || !m) { setStatus("Сначала разбери матч."); return; }
   setStatus("Готовим картинку…");
   try {
-    const canvas = await buildShareCanvas(m, c);
-    const url = canvas.toDataURL("image/png");
+    let url;
+    try {
+      const canvas = await buildShareCanvas(m, c, true);
+      url = canvas.toDataURL("image/png"); // на file:// может упасть из-за taint
+    } catch (e) {
+      const canvas = await buildShareCanvas(m, c, false);
+      url = canvas.toDataURL("image/png");
+    }
     const a = document.createElement("a");
     a.href = url;
     a.download = `kto-ruina-${m.match_id || state.matchId}.png`;
@@ -1105,6 +1255,7 @@ if (typeof module !== "undefined" && module.exports) {
     inferRoles, inferRole, roleWeights, scorePlayer, analyze, phasesFor, goldGapAt,
     teamKillsIn, teamObjectivesIn, matchStory, buildEvents, overview, setConstants,
     vsOpponent, vsBlock, itemHtml, itemFallback,
-    readMatchCache, writeMatchCache, readHistory, writeHistory, pushHistory
+    readMatchCache, writeMatchCache, readHistory, writeHistory, pushHistory,
+    towerMapHtml, buildingKills, reasonHtml
   };
 }
