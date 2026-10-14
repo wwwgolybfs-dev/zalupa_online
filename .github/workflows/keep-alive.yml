@@ -1,0 +1,28 @@
+name: keep-alive
+
+# Бесплатный проект Supabase засыпает после недели простоя, а вместе с ним
+# перестаёт отвечать и мост. Раз в три дня дёргаем его (и заодно Cloudflare,
+# чтобы иметь свежее представление о работоспособности обоих мостов).
+
+on:
+  schedule:
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase bridge
+        run: |
+          set -e
+          curl -fsS --max-time 30 "https://xxauwkymufehmoprmhay.supabase.co/functions/v1/dota/health"
+          echo
+          echo "Supabase bridge alive"
+
+      - name: Ping Cloudflare bridge
+        run: |
+          set -e
+          curl -fsS --max-time 30 "https://kto-ruina-bridge.wwwgolybfs.workers.dev/health"
+          echo
+          echo "Cloudflare bridge alive"

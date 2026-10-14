@@ -136,11 +136,19 @@ tools/fetch-assets.py      скрипт обновления картинок и
 происходит откат к следующему уровню, а последний уровень — прямой запрос.
 Если обе константы пустые, сайт работает напрямую, как раньше.
 
-- Cloudflare-воркер: `bridge/` (задеплоен, кеш через Cache API).
-- Supabase Edge Function: `supabase/` (требуется деплой в твой проект).
+| Уровень | Адрес | Состояние |
+|---|---|---|
+| Supabase | `https://xxauwkymufehmoprmhay.supabase.co/functions/v1/dota` | задеплоен, регион eu-west-1 |
+| Cloudflare | `https://kto-ruina-bridge.wwwgolybfs.workers.dev` | задеплоен, кеш через Cache API |
+| Прямой запрос | `api.opendota.com` | откат, если мосты недоступны |
 
 Ключ OpenDota (если он есть) хранится **на стороне моста** и в браузер не попадает:
 у Cloudflare это секрет `OPENDOTA_KEY`, у Supabase — `supabase secrets set OPENDOTA_KEY=...`.
+Именно ключ снимает лимит по общему исходящему IP.
+
+Рабочие файлы: `supabase/functions/dota/index.ts` и `bridge/worker.js`.
+Раз в три дня GitHub Actions дёргает `/health` обоих мостов, чтобы бесплатный проект
+Supabase не засыпал от простоя (`.github/workflows/keep-alive.yml`).
 
 ## Ограничения
 
