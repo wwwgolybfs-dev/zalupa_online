@@ -11,15 +11,14 @@
 
 /* ------------------------------- конфигурация ------------------------------ */
 const API = "https://api.opendota.com/api";
-const STEAM_CDN = "https://cdn.cloudflare.steamstatic.com";
 const OPENDOTA_MATCH = "https://www.opendota.com/matches";
-const LS_KEY = "wr:constants:v1";
-const LS_TTL = 7 * 24 * 60 * 60 * 1000;               // неделя
-const T = { match: 60000, constants: 25000, request: 15000, poll: 20000 };
+const T = { match: 60000, request: 15000, poll: 20000 };
 const PARSE_POLL = { interval: 10000, attempts: 18 };  // ~3 минуты ожидания парсинга
 const IS_BROWSER = typeof document !== "undefined" && typeof window !== "undefined";
 
-let HEROES = {}, ITEMS = {};
+// Герои, предметы и ранги приходят из data/*.js (локальные ассеты, см. tools/fetch-assets.py),
+// поэтому сайт не ходит за картинками на Steam CDN — всё лежит в репозитории.
+let HEROES = {}, ITEMS = {}, RANK_ICONS = [];
 
 /* --------------------------------- утилиты -------------------------------- */
 const $ = id => document.getElementById(id);
@@ -81,21 +80,6 @@ async function fetchJSON(url, opts = {}) {
   throw lastErr || new Error("Не удалось получить данные.");
 }
 
-/* ----------------------- константы героев и предметов ---------------------- */
-/* В localStorage кладём только нужные поля: так кеш в разы меньше квоты. */
-function readCache(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || !parsed.ts || Date.now() - parsed.ts > LS_TTL) return null;
-    return parsed.data;
-  } catch (e) { return null; }
-}
-function writeCache(key, data) {
-  try { localStorage.setItem(key, JSON.stringify({ ts: Date.now(), data })); } catch (e) { /* квота/приватный режим — не критично */ }
-}
-
 /* Кеш конкретного матча: повторное открытие не тратит лимит OpenDota. */
 const MATCH_CACHE_TTL = 15 * 60 * 1000; // 15 минут
 function readMatchCache(id) {
@@ -125,44 +109,7 @@ function pushHistory(entry) {
   list.unshift(entry);
   writeHistory(list);
 }
-function slimHeroes(raw) {
-  const out = {};
-  for (const id of Object.keys(raw || {})) {
-    const h = raw[id] || {};
-    out[id] = { img: h.img || "", name: h.localized_name || h.name || "" };
-  }
-  return out;
-}
-function slimItems(raw) {
-  const out = {};
-  for (const id of Object.keys(raw || {})) {
-    const it = raw[id] || {};
-    out[id] = { img: it.img || "", name: it.dname || it.localized_name || "" };
-  }
-  return out;
-}
-async function loadConstants(signal) {
-  const cached = readCache(LS_KEY);
-  let heroes = (cached && cached.heroes) || {};
-  let items = (cached && cached.items) || {};
-  const needHeroes = Object.keys(heroes).length === 0;
-  const needItems = Object.keys(items).length === 0;
-  if (!needHeroes && !needItems) { setConstants(heroes, items); return "cache"; }
-
-  // Справочники грузятся и кешируются независимо: раньше при неудачной
-  // загрузке предметов они кешировались пустыми на неделю, и сборка не
-  // показывалась вообще. Теперь недостающая часть догружается отдельно.
-  const [hr, ir] = await Promise.allSettled([
-    needHeroes ? fetchJSON(`${API}/constants/heroes`, { timeout: T.constants, signal }) : null,
-    needItems ? fetchJSON(`${API}/constants/items`, { timeout: T.constants, signal }) : null
-  ]);
-  if (needHeroes && hr.status === "fulfilled" && hr.value) heroes = slimHeroes(hr.value);
-  if (needItems && ir.status === "fulfilled" && ir.value) items = slimItems(ir.value);
-  setConstants(heroes, items);
-  writeCache(LS_KEY, { heroes, items });
-  return "network";
-}
-function setConstants(heroes, items) { HEROES = heroes || {}; ITEMS = items || {}; }
+function setConstants(heroes, items, ranks) { HEROES = heroes || {}; ITEMS = items || {}; if (ranks) RANK_ICONS = ranks; }
 
 /* ------------------------------ справочники ------------------------------- */
 function teamOf(p) { return Number(p.player_slot) < 128 ? "Radiant" : "Dire"; }
@@ -170,12 +117,12 @@ function heroData(p) { return HEROES[String(p.hero_id)] || {}; }
 function heroName(p) { return heroData(p).name || `Герой #${p.hero_id}`; }
 function heroImg(p) {
   const h = heroData(p);
-  if (h.img) return STEAM_CDN + h.img;
+  if (h.img) return h.img;
   const slug = String(h.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return slug ? `${STEAM_CDN}/apps/dota2/images/dota_react/heroes/${slug}.png` : "";
+  return slug ? `assets/heroes/${slug}.png` : "";
 }
 function itemData(id) { return ITEMS[String(id)] || {}; }
-function itemImg(id) { const it = itemData(id); return it.img ? STEAM_CDN + it.img : ""; }
+function itemImg(id) { return itemData(id).img || ""; }
 function itemName(id) { return itemData(id).name || "Предмет"; }
 /* Элемент сборки: если путь картинки известен — картинка, иначе видимый
    плейсхолдер с номером предмета (раньше был пустой src → ничего). */
@@ -190,7 +137,7 @@ function itemHtml(id) {
   const it = itemData(id);
   if (it.img) {
     const name = it.name || `#${id}`;
-    return `<img class="itemIcon" src="${STEAM_CDN + it.img}" alt="${esc(name)}" title="${esc(name)}" loading="lazy" data-name="${esc(name)}" data-fallback="${esc("#" + id)}" onerror="this.replaceWith(itemFallback(this))">`;
+    return `<img class="itemIcon" src="${it.img}" alt="${esc(name)}" title="${esc(name)}" loading="lazy" data-name="${esc(name)}" data-fallback="${esc("#" + id)}" onerror="this.replaceWith(itemFallback(this))">`;
   }
   return `<span class="itemFallback" title="Предмет #${id}">#${id}</span>`;
 }
@@ -201,7 +148,7 @@ function rankName(t) {
 }
 function rankImg(t) {
   const medal = Math.floor(Number(t || 0) / 10);
-  return medal ? `https://www.opendota.com/assets/images/dota2/rank_icons/rank_icon_${medal}.png` : "";
+  return medal && RANK_ICONS[medal - 1] ? RANK_ICONS[medal - 1] : "";
 }
 function itemsOf(p) {
   return [0, 1, 2, 3, 4, 5].map(k => p[`item_${k}`])
@@ -866,10 +813,6 @@ async function runAnalysis(id, opts = {}) {
       return;
     }
 
-    setStatus("Загружаем справочники героев и предметов…");
-    await loadConstants(signal);
-    if (isStale(run)) return;
-
     // Профиль виновника нужен только для ранга и аватара: без него разбор работает.
     const res = analyze(m, avail);
     if (!res.culprit.rank_tier && res.culprit.account_id) {
@@ -1001,8 +944,7 @@ async function buildShareCanvas(m, c) {
   // герой (если CDN отдаёт с CORS-заголовком)
   let drew = false;
   const img = new Image();
-  img.crossOrigin = "anonymous";
-  img.src = heroImg(c);
+  img.src = heroImg(c); // локальный ассет — тот же origin, канвас не «портится»
   await new Promise(res => { img.onload = res; img.onerror = res; setTimeout(res, 2500); });
   if (img.complete && img.naturalWidth > 0) {
     ctx.save(); rr(ctx, 40, 60, 132, 132, 14); ctx.clip();
@@ -1084,6 +1026,8 @@ async function downloadShareImage() {
 
 /* --------------------------------- запуск -------------------------------- */
 function init() {
+  // Справочники героев/предметов/рангов уже загружены через data/*.js (в index.html).
+  setConstants(window.HEROES_DATA || {}, window.ITEMS_DATA || {}, window.RANK_ICONS || []);
   const form = $("form");
   form.addEventListener("submit", e => {
     e.preventDefault();

@@ -1,0 +1,1 @@
+window.RANK_ICONS = ["assets/ranks/rank_icon_1.png","assets/ranks/rank_icon_2.png","assets/ranks/rank_icon_3.png","assets/ranks/rank_icon_4.png","assets/ranks/rank_icon_5.png","assets/ranks/rank_icon_6.png","assets/ranks/rank_icon_7.png","assets/ranks/rank_icon_8.png"];
