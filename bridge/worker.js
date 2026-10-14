@@ -59,9 +59,14 @@ export default {
 
     const force = url.searchParams.get("force") === "1";
     const isGet = request.method === "GET";
-    const target = `${UPSTREAM}/${path}`;
+    const cleanUrl = `${UPSTREAM}/${path}`;
+    // Ключ OpenDota передаём параметром api_key (API его проверяет: неверный даёт 400).
+    // Без ключа OpenDota считает лимит по IP, а у Cloudflare IP общие — поэтому ключ
+    // здесь не роскошь, а необходимость.
+    const key = env && env.OPENDOTA_KEY;
+    const fetchUrl = key ? `${cleanUrl}?api_key=${encodeURIComponent(key)}` : cleanUrl;
     const cache = caches.default;
-    const cacheKey = new Request(target, { method: "GET" });
+    const cacheKey = new Request(cleanUrl, { method: "GET" }); // без ключа внутри ключа кеша
 
     // 1) кеш датацентра Cloudflare
     if (isGet && !force) {
@@ -76,9 +81,9 @@ export default {
 
     // 2) идём в OpenDota из сети Cloudflare
     const headers = { "User-Agent": "kto-ruina-bridge" };
-    if (env && env.OPENDOTA_KEY) headers["Authorization"] = `Bearer ${env.OPENDOTA_KEY}`;
+    if (key) headers["Authorization"] = `Bearer ${key}`;
 
-    const upstream = await fetch(target, { method: request.method, headers });
+    const upstream = await fetch(fetchUrl, { method: request.method, headers });
 
     // 3) отдаём тело потоком, не читая его (экономия CPU)
     const response = new Response(upstream.body, {
