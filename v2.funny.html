@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      display: grid;
+      place-items: center;
+      background: #0a0d12;
+      color: #e8eaed;
+      font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      padding: 24px;
+    }
+    .gate { width: 100%; max-width: 320px; text-align: center; }
+    h1 {
+      margin: 0 0 20px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+    input {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 16px;
+      color: #fff;
+      background: #141a23;
+      border: 1px solid #2a3342;
+      border-radius: 10px;
+      outline: none;
+      text-align: center;
+      letter-spacing: 2px;
+    }
+    input:focus { border-color: #4b91f7; }
+    button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      background: #2e7df6;
+      border: 0;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .6; cursor: default; }
+    .err {
+      margin: 12px 0 0;
+      font-size: 14px;
+      color: #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+  <div class="gate" id="gate">
+    <form id="form" autocomplete="off">
+      <h1>Введите пароль</h1>
+      <input id="pw" type="password" placeholder="••••••" required autofocus>
+      <button id="btn" type="submit">Войти</button>
+      <p class="err" id="err" hidden>Неверный пароль</p>
+      <p class="err" id="neterr" hidden>Ошибка соединения</p>
+    </form>
+  </div>
+
+  <main id="content" hidden>
+    <!--
+      КОНТЕНТ ЗА ПАРОЛЕМ.
+      Всё, что ниже, показывается только после верного пароля.
+    -->
+    <h1>Доступ открыт</h1>
+    <p>Сюда вставь содержимое страницы.</p>
+  </main>
+
+  <script>
+    const SUPABASE_URL = "https://xxauwkymufehmoprmhay.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_ABzZaqdreTP8pe6L3fMFRA_kYo6J81W";
+    const PAGE_ID = "v2";
+
+    const form = document.getElementById("form");
+    const gate = document.getElementById("gate");
+    const content = document.getElementById("content");
+    const pw = document.getElementById("pw");
+    const btn = document.getElementById("btn");
+    const err = document.getElementById("err");
+    const neterr = document.getElementById("neterr");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      err.hidden = true;
+      neterr.hidden = true;
+      btn.disabled = true;
+      btn.textContent = "Проверяю…";
+
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/verify_page_password`, {
+          method: "POST",
+          headers: {
+            apikey: SUPABASE_KEY,
+            Authorization: `Bearer ${SUPABASE_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ page_id: PAGE_ID, guess: pw.value }),
+        });
+        const ok = (await r.text()).trim();
+        if (ok === "true") {
+          gate.hidden = true;
+          content.hidden = false;
+        } else {
+          err.hidden = false;
+          pw.value = "";
+          pw.focus();
+        }
+      } catch {
+        neterr.hidden = false;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Войти";
+      }
+    });
+  </script>
+</body>
+</html>
